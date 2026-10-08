@@ -32,6 +32,11 @@ const defaults = {
   botDashRange: 2.4,
   botAggression: 1.2,
   botPower: 0.65,
+
+  interpDelayMs: 100,
+  simLatencyMs: 0,
+  simJitterMs: 0,
+  simLossPct: 0,
 }
 
 export type Tuning = typeof defaults
@@ -71,5 +76,11 @@ export function useTuning(): Tuning {
     botAggression: { value: defaults.botAggression, min: 0, max: 10, step: 0.1 },
     botPower: { value: defaults.botPower, min: 0.1, max: 1.5, step: 0.05 },
   })
-  return Object.assign(tuning, arena, move, dash, hit, bot)
+  const net = useControls('Network', {
+    interpDelayMs: { value: defaults.interpDelayMs, min: 0, max: 400, step: 10 },
+    simLatencyMs: { value: defaults.simLatencyMs, min: 0, max: 500, step: 10 },
+    simJitterMs: { value: defaults.simJitterMs, min: 0, max: 200, step: 5 },
+    simLossPct: { value: defaults.simLossPct, min: 0, max: 50, step: 1 },
+  })
+  return Object.assign(tuning, arena, move, dash, hit, bot, net)
 }

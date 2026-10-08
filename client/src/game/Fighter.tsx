@@ -1,13 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { CapsuleCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import type { Group, MeshStandardMaterial } from 'three'
 import { Color } from 'three'
-import { fx, useGame } from './store'
-import type { FighterId } from './store'
-import { fighters } from './fighters'
+import { reportFall } from '../net/net'
+import { FighterMesh } from './FighterMesh'
+import { fighters, poseFighter } from './fighters'
 import type { Intent } from './fighters'
+import { fx, useGame } from './store'
 import { CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS, REST_Y, tuning } from './tuning'
 
 const STEP = 1 / 60
@@ -16,7 +17,7 @@ const approach = (current: number, target: number, maxDelta: number) =>
   current < target ? Math.min(current + maxDelta, target) : Math.max(current - maxDelta, target)
 
 type Props = {
-  id: FighterId
+  id: 'me' | 'bot'
   color: string
   spawn: [number, number]
   getIntent: (self: RapierRigidBody) => Intent
@@ -44,6 +45,9 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
     if (!b) return
     fighters.set(id, {
       body: b,
+      remote: false,
+      hitPower: () => (id === 'bot' ? tuning.botPower : 1),
+      heading: () => [state.current.headingX, state.current.headingZ],
       isDashing: () => state.current.dashTimer > 0,
       takeHit: (dirX, dirZ, power) => {
         const s = state.current
@@ -88,10 +92,12 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
       kx /= klen
       kz /= klen
 
-      const clash = other.isDashing()
+      // Two local fighters dashing into each other both get knocked back. A remote player's
+      // own client reports their half of a clash, so it is not applied here.
+      const clash = other.isDashing() && !other.remote
       other.takeHit(kx, kz, id === 'bot' ? tuning.botPower : 1)
       if (clash) {
-        fighters.get(id)?.takeHit(-kx, -kz, otherId === 'bot' ? tuning.botPower : 1)
+        fighters.get(id)?.takeHit(-kx, -kz, other.hitPower())
       } else {
         s.dashTimer = 0
         self.setLinvel({ x: kx * 2, y: 0, z: kz * 2 }, true)
@@ -114,7 +120,7 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
     if (p.y < t.killY) {
       if (!s.dead) {
         s.dead = true
-        useGame.getState().knockout(id)
+        reportFall(id)
       }
       return
     }
@@ -164,18 +170,13 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
     )
   })
 
-  const baseColor = useRef(new Color(color))
+  const baseColor = useMemo(() => new Color(color), [color])
   useFrame((_, dt) => {
     const s = state.current
     s.squash = Math.max(0, s.squash - dt * 5)
-    const g = visual.current
-    if (g) {
-      const stretch = s.dashTimer > 0 ? 0.25 : 0
-      g.rotation.y = Math.atan2(s.headingX, s.headingZ)
-      g.scale.set(1 + 0.3 * s.squash - stretch * 0.4, 1 - 0.35 * s.squash - stretch * 0.2, 1 + 0.3 * s.squash + stretch)
-    }
+    if (visual.current) poseFighter(visual.current, s.headingX, s.headingZ, s.squash, s.dashTimer > 0)
     // Dimmed while the dash is on cooldown.
-    material.current?.color.copy(baseColor.current).multiplyScalar(s.cooldown > 0 ? 0.45 : 1)
+    material.current?.color.copy(baseColor).multiplyScalar(s.cooldown > 0 ? 0.45 : 1)
   })
 
   return (
@@ -188,16 +189,7 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
       ccd
     >
       <CapsuleCollider args={[CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS]} mass={1} friction={0} restitution={0} />
-      <group ref={visual}>
-        <mesh castShadow>
-          <capsuleGeometry args={[CAPSULE_RADIUS, CAPSULE_HALF_HEIGHT * 2, 8, 16]} />
-          <meshStandardMaterial ref={material} color={color} />
-        </mesh>
-        <mesh position={[0, 0.3, CAPSULE_RADIUS]} castShadow>
-          <boxGeometry args={[0.3, 0.15, 0.25]} />
-          <meshStandardMaterial color="#111827" />
-        </mesh>
-      </group>
+      <FighterMesh color={color} groupRef={visual} materialRef={material} />
     </RigidBody>
   )
 }

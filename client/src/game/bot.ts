@@ -8,7 +8,7 @@ const STEP = 1 / 60
 // Walks at the player, dashes when close, and backs off the edge when it gets too near it.
 export function botIntent(self: RapierRigidBody): Intent {
   const me = self.translation()
-  const target = fighters.get('player')?.body.translation()
+  const target = fighters.get('me')?.body.translation()
 
   let x = -me.x
   let z = -me.z

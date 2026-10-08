@@ -27,14 +27,6 @@ body,
   gap: 12px;
 }
 
-.score .you {
-  color: #38bdf8;
-}
-
-.score .bot {
-  color: #f87171;
-}
-
 .banner {
   font-size: 56px;
   font-weight: 800;
@@ -44,4 +36,6 @@ body,
 .help {
   font-size: 14px;
   opacity: 0.7;
+  text-align: center;
+  line-height: 1.6;
 }
