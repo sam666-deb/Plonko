@@ -79,6 +79,8 @@ export const sfx = {
     tone('square', 2850, 2600, 0.09, 0.05 * strength)
   },
   bump: (strength: number) => tone('sine', 120, 60, 0.1, 0.35 * strength),
+  // A floor tile breaking away. Quiet, because several can go in a second.
+  crumble: () => noise('lowpass', 700, 120, 0.25, 0.22),
   fall: () => tone('triangle', 520, 80, 0.6, 0.25),
   ready: () => tone('square', 440, 440, 0.08, 0.1),
   go: () => tone('square', 880, 880, 0.2, 0.12),
