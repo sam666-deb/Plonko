@@ -1,6 +1,0 @@
-# Browsers on an HTTPS page can only open wss:// sockets, so the relay needs TLS in front of it.
-# Caddy fetches the certificate itself; point the subdomain's DNS at the server first.
-# Build the client with VITE_WS_URL=wss://plonko-relay.example.com
-plonko-relay.example.com {
-	reverse_proxy localhost:8787
-}

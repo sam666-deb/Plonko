@@ -7,3 +7,7 @@ plonko-itch.zip
 .env*.local
 # Cloudflare's local working files.
 .wrangler
+# Deployment notes, server tooling and store-page images: kept on this machine, not published.
+DEPLOY.md
+deploy/
+press/
