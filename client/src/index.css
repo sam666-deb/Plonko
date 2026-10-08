@@ -1,0 +1,47 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #1f2937;
+  font-family: system-ui, sans-serif;
+  color: #f9fafb;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.score {
+  font-size: 28px;
+  font-weight: 700;
+  display: flex;
+  gap: 12px;
+}
+
+.score .you {
+  color: #38bdf8;
+}
+
+.score .bot {
+  color: #f87171;
+}
+
+.banner {
+  font-size: 56px;
+  font-weight: 800;
+  text-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
+}
+
+.help {
+  font-size: 14px;
+  opacity: 0.7;
+}
