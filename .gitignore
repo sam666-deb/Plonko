@@ -5,3 +5,5 @@ assets-src
 # The zip uploaded to itch.io, and local build settings such as the relay address.
 plonko-itch.zip
 .env*.local
+# Cloudflare's local working files.
+.wrangler

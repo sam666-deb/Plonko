@@ -1,0 +1,9 @@
+// Tells Cloudflare what to publish: the built client, as static files. There is no server code
+// here; the relay runs separately (see DEPLOY.md).
+{
+  "name": "plonko",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./client/dist"
+  }
+}
