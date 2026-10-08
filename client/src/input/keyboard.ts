@@ -9,6 +9,8 @@ let emoteQueued = 0
 window.addEventListener('keydown', (e) => {
   // Typing in a text box (the name field) is not game input.
   if (e.target instanceof HTMLInputElement) return
+  // Inside a frame the arrow keys would scroll the page around the game.
+  if (e.code.startsWith('Arrow') && useGame.getState().mode !== 'landing') e.preventDefault()
   if (e.code === 'Space' && !useGame.getState().menuOpen) {
     e.preventDefault()
     // A clicked HUD button keeps focus, and Space would press it again instead of dashing.

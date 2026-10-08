@@ -12,6 +12,17 @@ import { fx, useGame } from '../game/store'
 import { tuning } from '../game/tuning'
 
 const URL_ = import.meta.env.VITE_WS_URL ?? `ws://${location.hostname}:${DEFAULT_PORT}`
+
+// A secure page can only open secure sockets. A build with no relay address set can still reach
+// the development relay from a plain http page, but from an https one online play is off.
+export const ONLINE_AVAILABLE = Boolean(import.meta.env.VITE_WS_URL) || location.protocol === 'http:'
+
+// Inside a frame (itch.io) the page's own address is not one a friend can open, so the room
+// is shared by its code instead of by link.
+export const EMBEDDED = window.self !== window.top
+
+export const cleanCode = (code: string) => code.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8)
+export const roomCode = () => room
 const RECONNECT_MS = 2000
 const BUFFER_MS = 1000
 
@@ -191,14 +202,13 @@ export function sendHit(target: string, dvx: number, dvz: number, up: number) {
   send({ type: 'hit', target, impulse: [dvx, up, dvz], recoil: false })
 }
 
-// Enters online play: joins the room named in the URL, or makes a new one and puts its code
-// in the URL so the address bar becomes the invite link.
-export function startOnline() {
+// Enters online play. Joins the room with the given code, or the one named in the URL, or makes
+// a new one. The code is put in the URL so the address bar is the invite link.
+export function startOnline(code?: string) {
   if (room) return
   const url = new URL(location.href)
-  room = url.searchParams.get('room') ?? ''
-  if (!room) {
-    room = Math.random().toString(36).slice(2, 6)
+  room = cleanCode(code ?? url.searchParams.get('room') ?? '') || Math.random().toString(36).slice(2, 6)
+  if (url.searchParams.get('room') !== room) {
     url.searchParams.set('room', room)
     history.replaceState(null, '', url)
   }

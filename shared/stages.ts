@@ -361,6 +361,11 @@ export const STAGES: Stage[] = [
 
 export const DEFAULT_STAGE = 'hall'
 
+// The solo campaign: every stage in order of difficulty. Each level is a short match on one
+// stage, and beating it opens the next.
+export const CAMPAIGN = STAGES.map((s) => s.id)
+export const CAMPAIGN_WINS = 2
+
 export const stageById = (id: string): Stage => STAGES.find((s) => s.id === id) ?? STAGES[0]
 
 // Level 1 is normal, 2 medium, 3 hard, and everything after that extreme.

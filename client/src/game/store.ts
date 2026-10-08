@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import { COUNTDOWN_MS, DEFAULT_STAGE, ROUND_RESET_MS, WINS_TO_MATCH, pickStage, stageById } from '@plonko/shared'
+import { CAMPAIGN, CAMPAIGN_WINS, COUNTDOWN_MS, DEFAULT_STAGE, ROUND_RESET_MS, WINS_TO_MATCH, pickStage, stageById } from '@plonko/shared'
 import type { Peer } from '@plonko/shared'
 import { sfx } from '../audio/sfx'
+import { useSettings } from './settings'
 import { resetStats } from './stats'
 import { after } from './ticker'
 
@@ -11,6 +12,10 @@ export type FighterId = string
 type GameState = {
   // landing: the start screen. solo: against the bot, no server. online: in a room with another player.
   mode: 'landing' | 'solo' | 'online'
+  // Which landing screen is showing: the main one or the campaign's level select.
+  screen: 'home' | 'levels'
+  // The campaign level being played, counting from 0. null in a quick match or online.
+  campaign: number | null
   scores: { me: number; them: number }
   round: number
   // The round of the current match, counting from 1, and the id of the stage it is played on.
@@ -38,6 +43,9 @@ type GameState = {
   beginRound: (changes?: Partial<GameState>) => void
   localKnockout: (loser: 'me' | 'bot') => void
   localRematch: () => void
+  startCampaign: (level: number) => void
+  // Leaves the game for the campaign's level select.
+  toLevels: () => void
   startSolo: () => void
   hitstop: (ms: number) => void
 }
@@ -49,6 +57,8 @@ const nextLevel = (level: number, previous?: string) => ({ level, stage: pickSta
 
 export const useGame = create<GameState>((set, get) => ({
   mode: 'landing',
+  screen: 'home',
+  campaign: null,
   scores: { me: 0, them: 0 },
   round: 0,
   level: 1,
@@ -88,8 +98,9 @@ export const useGame = create<GameState>((set, get) => ({
     if (g.banner || g.match) return
     const meWon = loser === 'bot'
     const scores = { me: g.scores.me + (meWon ? 1 : 0), them: g.scores.them + (meWon ? 0 : 1) }
-    if (Math.max(scores.me, scores.them) >= WINS_TO_MATCH) {
+    if (Math.max(scores.me, scores.them) >= winsNeeded()) {
       set({ scores, match: meWon ? 'won' : 'lost' })
+      if (meWon && g.campaign !== null) saveStars(g.campaign, scores.them)
       if (meWon) sfx.matchWon()
       else sfx.matchLost()
       return
@@ -99,18 +110,29 @@ export const useGame = create<GameState>((set, get) => ({
     else sfx.roundLost()
     setTimeout(() => {
       const now = get()
-      if (now.mode === 'solo') now.beginRound(nextLevel(now.level + 1, now.stage))
+      if (now.mode !== 'solo') return
+      // A campaign level stays on its stage; a quick match moves up a tier each round.
+      now.beginRound(now.campaign === null ? nextLevel(now.level + 1, now.stage) : { level: now.level + 1 })
     }, ROUND_RESET_MS)
   },
 
   localRematch: () => {
+    const { campaign } = get()
+    if (campaign !== null) return get().startCampaign(campaign)
     resetStats()
     get().beginRound({ scores: { me: 0, them: 0 }, match: null, ...nextLevel(1, get().stage) })
   },
 
+  startCampaign: (level) => {
+    resetStats()
+    get().beginRound({ mode: 'solo', campaign: level, scores: { me: 0, them: 0 }, match: null, level: 1, stage: CAMPAIGN[level] })
+  },
+
+  toLevels: () => get().beginRound({ mode: 'landing', screen: 'levels', campaign: null, scores: { me: 0, them: 0 }, match: null }),
+
   startSolo: () => {
     resetStats()
-    get().beginRound({ mode: 'solo', scores: { me: 0, them: 0 }, match: null, ...nextLevel(1) })
+    get().beginRound({ mode: 'solo', campaign: null, scores: { me: 0, them: 0 }, match: null, ...nextLevel(1) })
   },
 
   hitstop: (ms) => {
@@ -119,6 +141,18 @@ export const useGame = create<GameState>((set, get) => ({
     after(ms, () => set({ frozen: false }))
   },
 }))
+
+// Round wins that take the match: fewer for a campaign level than for a full match.
+export const winsNeeded = () => (useGame.getState().campaign === null ? WINS_TO_MATCH : CAMPAIGN_WINS)
+
+// Three stars for a clean win, one fewer for each round dropped, and never fewer than one.
+// Only ever raises a level's saved result.
+function saveStars(level: number, roundsLost: number) {
+  const stars = [...useSettings.getState().campaignStars]
+  for (let n = 0; n <= level; n++) stars[n] ??= 0
+  stars[level] = Math.max(stars[level], Math.max(1, 3 - roundsLost))
+  useSettings.getState().change({ campaignStars: stars })
+}
 
 // True once the countdown is over and until the round or match is decided. Never while the menu is open.
 export const isPlaying = () => {

@@ -1,8 +1,10 @@
-import { AVATARS, MAX_NAME_LENGTH } from '@plonko/shared'
+import { AVATARS, CAMPAIGN, MAX_NAME_LENGTH } from '@plonko/shared'
 import { useSettings } from '../game/settings'
 import { useGame } from '../game/store'
-import { startOnline } from '../net/net'
+import { useState } from 'react'
+import { ONLINE_AVAILABLE, cleanCode, startOnline } from '../net/net'
 import { BotIcon, FriendsIcon, SlidersIcon } from './icons'
+import { Levels } from './Levels'
 
 function NameField() {
   const name = useSettings((s) => s.name)
@@ -42,12 +44,47 @@ function AvatarPicker() {
   )
 }
 
+// Joining a friend's room by the code they read out, for when a link cannot be shared.
+function JoinByCode() {
+  const [code, setCode] = useState('')
+  const join = () => code && startOnline(code)
+  return (
+    <div className="join-code">
+      <span>Have a room code?</span>
+      <input
+        className="code-field"
+        value={code}
+        placeholder="CODE"
+        aria-label="Room code"
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        onChange={(e) => setCode(cleanCode(e.target.value))}
+        onKeyDown={(e) => e.key === 'Enter' && join()}
+      />
+      <button disabled={!code} onClick={join}>
+        Join
+      </button>
+    </div>
+  )
+}
+
 // The start screen. Opened normally it offers solo or online play; opened from an invite link
 // it offers to join that room. Either way the player picks a character first.
 export function Landing() {
-  const startSolo = useGame((s) => s.startSolo)
   const setMenu = useGame((s) => s.setMenu)
+  const screen = useGame((s) => s.screen)
+  const beaten = useSettings((s) => s.campaignStars.filter((n) => n > 0).length)
   const invited = new URLSearchParams(location.search).has('room')
+  const show = (next: 'home' | 'levels') => useGame.setState({ screen: next })
+
+  if (screen === 'levels' && !invited) {
+    return (
+      <div className="landing">
+        <Levels onBack={() => show('home')} />
+      </div>
+    )
+  }
 
   return (
     <div className="landing">
@@ -66,25 +103,26 @@ export function Landing() {
       <AvatarPicker />
 
       {invited ? (
-        <button className="primary join" onClick={startOnline}>
+        <button className="primary join" onClick={() => startOnline()}>
           <FriendsIcon /> Join the match
         </button>
       ) : (
         <div className="choices">
-          <button className="card" onClick={startSolo}>
+          <button className="card" onClick={() => show('levels')}>
             <span className="card-icon solo">
               <BotIcon />
             </span>
             <strong>Play solo</strong>
-            <span>Warm up against the bot</span>
+            <span>{beaten > 0 ? `Campaign · ${beaten} of ${CAMPAIGN.length} beaten` : 'Campaign against the bot'}</span>
           </button>
-          <button className="card" onClick={startOnline}>
+          <button className="card" disabled={!ONLINE_AVAILABLE} onClick={() => startOnline()}>
             <span className="card-icon duo">
               <FriendsIcon />
             </span>
             <strong>Play with a friend</strong>
-            <span>Get a link, send it, fight</span>
+            <span>{ONLINE_AVAILABLE ? 'Get a code, send it, fight' : 'Not available in this version'}</span>
           </button>
+          {ONLINE_AVAILABLE && <JoinByCode />}
         </div>
       )}
 
@@ -97,7 +135,7 @@ export function Landing() {
         <button className="ghost" onClick={() => setMenu(true)}>
           <SlidersIcon /> Settings
         </button>
-        <div className="keys">
+        <div className="keys desktop-only">
           <kbd>W</kbd>
           <kbd>A</kbd>
           <kbd>S</kbd>

@@ -15,6 +15,8 @@ export type Settings = {
   flash: boolean
   shadows: boolean
   showNetStats: boolean
+  // Best result on each campaign level, by level index: 0 for not yet beaten, otherwise 1 to 3 stars.
+  campaignStars: number[]
 }
 
 type SettingsState = Settings & { change: (changes: Partial<Settings>) => void }
@@ -32,6 +34,7 @@ export const useSettings = create<SettingsState>()(
       flash: true,
       shadows: true,
       showNetStats: false,
+      campaignStars: [],
       change: (changes) => set(changes),
     }),
     { name: 'plonko-settings' },

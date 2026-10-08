@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { COUNTDOWN_MS, WINS_TO_MATCH, stageById } from '@plonko/shared'
+import { CAMPAIGN, CAMPAIGN_WINS, COUNTDOWN_MS, WINS_TO_MATCH, stageById } from '@plonko/shared'
 import { fighters } from '../game/fighters'
 import { useSettings } from '../game/settings'
 import { stats } from '../game/stats'
 import { useGame } from '../game/store'
-import { netStats, requestRematch } from '../net/net'
+import { EMBEDDED, netStats, requestRematch, roomCode } from '../net/net'
 import { Landing } from './Landing'
+import { Stars } from './Levels'
 import { Menu } from './Menu'
 import { StagePreview } from './StagePreview'
+import { TouchControls } from './TouchControls'
+import { useTouchDevice } from './useTouchDevice'
 import { setTrack } from '../audio/music'
 
 // Connection figures live outside React, so components showing them re-render on a timer.
@@ -54,9 +57,15 @@ function Waiting() {
       <strong>Waiting for a rival</strong>
       {netStats.connected ? (
         <>
-          <span>Send this link to a friend. The match starts when they open it.</span>
-          <code>{location.href}</code>
-          <InviteButton />
+          <span>Give your friend this room code. The match starts when they join.</span>
+          <code className="room-code">{roomCode().toUpperCase()}</code>
+          {/* Framed inside another site, this page's address is not one a friend could open. */}
+          {!EMBEDDED && (
+            <>
+              <span>Or send them the link:</span>
+              <InviteButton />
+            </>
+          )}
           <span>You can move around while you wait.</span>
         </>
       ) : (
@@ -172,7 +181,15 @@ export function Hud() {
   const flashOn = useSettings((s) => s.flash)
   const showPing = useSettings((s) => s.showNetStats)
   const paused = useGame((s) => s.menuOpen && s.mode === 'solo')
+  const isTouch = useTouchDevice()
   const myName = useSettings((s) => s.name) || 'You'
+  const campaign = useGame((s) => s.campaign)
+  const savedStars = useSettings((s) => s.campaignStars)
+  const startCampaign = useGame((s) => s.startCampaign)
+  const toLevels = useGame((s) => s.toLevels)
+  // A campaign level is named by its place in the campaign; a match by the round it has reached.
+  const levelLabel = campaign === null ? `Level ${level}` : `Campaign ${campaign + 1}`
+  const wins = campaign === null ? WINS_TO_MATCH : CAMPAIGN_WINS
   const rivalName = useGame((s) => (s.mode === 'online' ? (s.peers[0]?.name ?? 'Rival') : 'Bot'))
 
   // Leaving the landing page drops keyboard focus from its name box and buttons, so the game keys work at once.
@@ -211,7 +228,7 @@ export function Hud() {
               </span>
             </div>
             <div className="goal">
-              First to {WINS_TO_MATCH} · Level {level} · <span className={`tier ${stage.tier}`}>{stage.tier}</span>
+              First to {wins} · {levelLabel} · <span className={`tier ${stage.tier}`}>{stage.tier}</span>
             </div>
             <Status myName={myName} rivalName={rivalName} />
           </>
@@ -223,11 +240,40 @@ export function Hud() {
       ) : waiting ? (
         <Waiting />
       ) : match ? (
-        <div className="result">
-          <div className="banner">{match === 'won' ? 'You win the match!' : 'You lost the match'}</div>
-          <Summary myName={myName} rivalName={rivalName} scores={scores} />
-          <button onClick={requestRematch}>Play again</button>
-        </div>
+        campaign === null ? (
+          <div className="result">
+            <div className="banner">{match === 'won' ? 'You win the match!' : 'You lost the match'}</div>
+            <Summary myName={myName} rivalName={rivalName} scores={scores} />
+            <button onClick={requestRematch}>Play again</button>
+          </div>
+        ) : (
+          <div className="result">
+            <div className="banner">
+              {match === 'lost'
+                ? `Level ${campaign + 1} failed`
+                : campaign + 1 === CAMPAIGN.length
+                  ? 'Campaign complete!'
+                  : `Level ${campaign + 1} complete!`}
+            </div>
+            {/* Three stars for a clean win, one fewer for each round dropped. */}
+            {match === 'won' && <Stars count={Math.max(1, 3 - scores.them)} />}
+            <Summary myName={myName} rivalName={rivalName} scores={scores} />
+            {match === 'won' && (savedStars[campaign] ?? 0) > Math.max(1, 3 - scores.them) && (
+              <div className="best">Your best here is {savedStars[campaign]} stars</div>
+            )}
+            <div className="panel-actions">
+              {match === 'won' && campaign + 1 < CAMPAIGN.length && (
+                <button className="next" onClick={() => startCampaign(campaign + 1)}>
+                  Next level
+                </button>
+              )}
+              <button className={match === 'lost' ? 'next' : ''} onClick={requestRematch}>
+                {match === 'won' ? 'Replay' : 'Try again'}
+              </button>
+              <button onClick={toLevels}>Levels</button>
+            </div>
+          </div>
+        )
       ) : banner ? (
         <div className="banner">{banner}</div>
       ) : (
@@ -239,7 +285,7 @@ export function Hud() {
         >
           <span className="ready">
             <span className={`tier ${stage.tier}`}>
-              Level {level} · {stage.tier}
+              {levelLabel} · {stage.tier}
             </span>
             <span className="banner">{stage.name}</span>
             <StagePreview stage={stage} />
@@ -249,9 +295,11 @@ export function Hud() {
       )}
 
       <div className="help">
-        <div>WASD / arrows move · Space dash · Shift block · E jump · 1 2 3 emotes · Esc menu</div>
+        {/* Key hints are no use on a touch screen, where the controls are labelled buttons. */}
+        {!isTouch && <div>WASD / arrows move · Space dash · Shift block · E jump · 1 2 3 emotes · Esc menu</div>}
         {mode === 'online' && hasRival && showPing && <Ping />}
       </div>
+      {isTouch && !match && !waiting && <TouchControls />}
     </div>
   )
 }

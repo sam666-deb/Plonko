@@ -2,3 +2,6 @@ node_modules
 .DS_Store
 # Original asset pack downloads; only the files the game uses are copied into client/public.
 assets-src
+# The zip uploaded to itch.io, and local build settings such as the relay address.
+plonko-itch.zip
+.env*.local

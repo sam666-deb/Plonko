@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo } from 'react'
 import { stageById } from '@plonko/shared'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
-import { keyboardIntent } from '../input/keyboard'
+import { playerIntent } from '../input/player'
 import { botIntent } from './bot'
 import { Fighter } from './Fighter'
 import { FloorItems } from './FloorItems'
@@ -19,6 +19,11 @@ import { inBackground } from './ticker'
 import { useTuning } from './tuning'
 
 const CAMERA_POS: [number, number, number] = [0, 15, 12]
+// The camera is placed for a wide screen. On a narrower one it pulls back by this much, so
+// the whole arena still fits across; the fog pulls back with it.
+const pullBack = (aspect: number) => Math.max(1, 1.15 / aspect)
+const FOG_NEAR = 27
+const FOG_FAR = 50
 const COLORS = ['#38bdf8', '#f87171']
 
 // Fixed overview camera behind the local player's side; only moves to shake on a hit.
@@ -26,19 +31,24 @@ const COLORS = ['#38bdf8', '#f87171']
 function CameraRig() {
   const side = useGame((s) => sideOf(s.slot))
   const landing = useGame((s) => s.mode === 'landing')
-  useFrame(({ camera, clock }, dt) => {
+  useFrame(({ camera, clock, scene, size }, dt) => {
+    const back = pullBack(size.width / size.height)
+    if (scene.fog && 'near' in scene.fog) {
+      scene.fog.near = FOG_NEAR * back
+      scene.fog.far = FOG_FAR * back
+    }
     if (landing) {
       const angle = clock.elapsedTime * 0.12
-      camera.position.set(Math.sin(angle) * 14, 10, Math.cos(angle) * 14)
+      camera.position.set(Math.sin(angle) * 14 * back, 10 * back, Math.cos(angle) * 14 * back)
       camera.lookAt(0, 0, 0)
       return
     }
     fx.shake = Math.max(0, fx.shake - dt * 3)
     const shake = fx.shake * useSettings.getState().shake
     camera.position.set(
-      CAMERA_POS[0] + (Math.random() - 0.5) * shake,
-      CAMERA_POS[1] + (Math.random() - 0.5) * shake,
-      CAMERA_POS[2] * side,
+      CAMERA_POS[0] * back + (Math.random() - 0.5) * shake,
+      CAMERA_POS[1] * back + (Math.random() - 0.5) * shake,
+      CAMERA_POS[2] * back * side,
     )
     camera.lookAt(0, 0, 0)
   })
@@ -82,7 +92,7 @@ export function Game() {
   return (
     <Canvas shadows camera={{ position: CAMERA_POS, fov: 42 }}>
       {/* Distant things fade into the dark, so tiles and fighters vanish as they fall into the pit. */}
-      <fog attach="fog" args={[theme.fog, 27, 50]} />
+      <fog attach="fog" args={[theme.fog, FOG_NEAR, FOG_FAR]} />
       <ambientLight intensity={0.55} color={theme.ambient} />
       <directionalLight position={[6, 14, 6]} intensity={1.5} color="#fff1dc" castShadow={shadows} shadow-mapSize={[1024, 1024]}>
         <orthographicCamera attach="shadow-camera" args={[-16, 16, 16, -16, 1, 40]} />
@@ -104,7 +114,7 @@ export function Game() {
           color={COLORS[slot]}
           spawn={spawns[slot]}
           name={tags ? myName : undefined}
-          getIntent={keyboardIntent}
+          getIntent={playerIntent}
         />
         {/* The bot is the solo opponent, and stands on the arena behind the landing page. */}
         {mode !== 'online' ? (
