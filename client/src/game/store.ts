@@ -7,6 +7,8 @@ import { sfx } from '../audio/sfx'
 export type FighterId = string
 
 type GameState = {
+  // landing: the start screen. solo: against the bot, no server. online: in a room with another player.
+  mode: 'landing' | 'solo' | 'online'
   scores: { me: number; them: number }
   round: number
   // performance.now() at which the current round's countdown ends and fighters may move.
@@ -21,13 +23,21 @@ type GameState = {
   selfId: string | null
   slot: number
   peers: Peer[]
+  // The other player has left mid-session; the player is asked whether to wait or quit.
+  rivalLeft: boolean
+  menuOpen: boolean
+  setMenu: (open: boolean) => void
   beginRound: (changes?: Partial<GameState>) => void
   localKnockout: (loser: 'me' | 'bot') => void
   localRematch: () => void
+  startSolo: () => void
   hitstop: (ms: number) => void
 }
 
+let menuOpenedAt = 0
+
 export const useGame = create<GameState>((set, get) => ({
+  mode: 'landing',
   scores: { me: 0, them: 0 },
   round: 0,
   playAt: performance.now() + COUNTDOWN_MS,
@@ -38,6 +48,17 @@ export const useGame = create<GameState>((set, get) => ({
   selfId: null,
   slot: 0,
   peers: [],
+  rivalLeft: false,
+  menuOpen: false,
+
+  // Against the bot the menu is a real pause, so the round clock is pushed back by the time spent in it.
+  setMenu: (open) => {
+    const g = get()
+    if (open === g.menuOpen) return
+    if (open) menuOpenedAt = performance.now()
+    const paused = !open && g.mode === 'solo' ? performance.now() - menuOpenedAt : 0
+    set({ menuOpen: open, playAt: g.playAt + paused })
+  },
 
   // Every round start goes through here: fighters respawn and the countdown restarts.
   beginRound: (changes) => {
@@ -47,7 +68,7 @@ export const useGame = create<GameState>((set, get) => ({
     setTimeout(() => get().round === round && sfx.go(), COUNTDOWN_MS)
   },
 
-  // Offline rounds against the bot; online rounds are decided by the server.
+  // Solo rounds against the bot; online rounds are decided by the server.
   localKnockout: (loser) => {
     const g = get()
     if (g.banner || g.match) return
@@ -63,11 +84,13 @@ export const useGame = create<GameState>((set, get) => ({
     if (meWon) sfx.roundWon()
     else sfx.roundLost()
     setTimeout(() => {
-      if (get().peers.length === 0) get().beginRound()
+      if (get().mode === 'solo') get().beginRound()
     }, ROUND_RESET_MS)
   },
 
   localRematch: () => get().beginRound({ scores: { me: 0, them: 0 }, match: null }),
+
+  startSolo: () => get().beginRound({ mode: 'solo', scores: { me: 0, them: 0 }, match: null }),
 
   hitstop: (ms) => {
     if (ms <= 0 || get().frozen) return
@@ -76,10 +99,10 @@ export const useGame = create<GameState>((set, get) => ({
   },
 }))
 
-// True once the countdown is over and until the round or match is decided.
+// True once the countdown is over and until the round or match is decided. Never while the menu is open.
 export const isPlaying = () => {
   const g = useGame.getState()
-  return !g.match && performance.now() >= g.playAt
+  return g.mode !== 'landing' && !g.match && !g.menuOpen && !g.rivalLeft && performance.now() >= g.playAt
 }
 
 // Slot 0 plays from the near side of the arena, slot 1 from the far side with the view turned round.

@@ -1,13 +1,33 @@
+:root {
+  --text: #f5f6ff;
+  --muted: rgb(245 246 255 / 0.62);
+  --glass: rgb(255 255 255 / 0.07);
+  --glass-strong: rgb(255 255 255 / 0.12);
+  --line: rgb(255 255 255 / 0.12);
+  --panel: rgb(18 20 44 / 0.78);
+  --accent: #6d5efc;
+  --accent-2: #38bdf8;
+  --blue: #38bdf8;
+  --red: #f87171;
+  --radius: 18px;
+}
+
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #1f2937;
-  font-family: system-ui, sans-serif;
-  color: #f9fafb;
+  font-family: 'Fredoka', system-ui, sans-serif;
+  color: var(--text);
 }
+
+/* The 3D canvas is transparent, so this is the sky behind the arena. */
+body {
+  background: radial-gradient(1100px 700px at 50% 25%, #303a8c 0%, #171a3d 55%, #0a0b1c 100%);
+}
+
+/* ---------- shared pieces ---------- */
 
 .hud {
   position: fixed;
@@ -20,68 +40,141 @@ body,
   padding: 16px;
 }
 
-.score {
-  font-size: 28px;
-  font-weight: 700;
-  display: flex;
-  gap: 12px;
+.hud button {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 18px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition:
+    transform 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
 }
 
-.banner {
-  font-size: 56px;
-  font-weight: 800;
-  text-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
+.hud button:hover {
+  background: var(--glass-strong);
+  transform: translateY(-1px);
 }
 
-.help {
-  font-size: 14px;
-  opacity: 0.7;
-  text-align: center;
-  line-height: 1.6;
+.hud button:active {
+  transform: translateY(0) scale(0.98);
 }
+
+.hud button:focus-visible,
+.hud input:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+.hud button.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  box-shadow: 0 8px 24px rgb(109 94 252 / 0.35);
+}
+
+.hud button.primary:hover {
+  box-shadow: 0 10px 30px rgb(109 94 252 / 0.5);
+}
+
+.hud button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  backdrop-filter: none;
+}
+
+.hud button.ghost:hover {
+  color: var(--text);
+  background: var(--glass);
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+}
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---------- in-game HUD ---------- */
 
 .top {
   text-align: center;
 }
 
+.score {
+  display: inline-flex;
+  gap: 12px;
+  padding: 8px 22px;
+  font-size: 26px;
+  font-weight: 700;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+}
+
+.score .sep {
+  opacity: 0.4;
+}
+
 .goal {
+  margin-top: 6px;
   font-size: 13px;
-  opacity: 0.6;
+  color: var(--muted);
 }
 
-.hud button {
-  pointer-events: auto;
-  font: inherit;
-  font-weight: 600;
-  color: #f9fafb;
-  background: #374151;
-  border: 1px solid #6b7280;
-  border-radius: 8px;
-  padding: 8px 16px;
-  cursor: pointer;
+.banner {
+  font-size: clamp(40px, 8vw, 72px);
+  font-weight: 700;
+  text-align: center;
+  text-shadow: 0 6px 24px rgb(0 0 0 / 0.55);
 }
 
-.hud button:hover {
-  background: #4b5563;
+.help {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.6;
 }
 
 .result {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .result button {
   font-size: 20px;
-  padding: 12px 28px;
-}
-
-.buttons {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  box-shadow: 0 8px 24px rgb(109 94 252 / 0.35);
 }
 
 /* "Ready…" shows for the countdown, then "Go!" flashes as control is handed over. */
@@ -101,6 +194,10 @@ body,
 
 .countdown .go {
   animation: show 500ms steps(1, end) var(--countdown);
+}
+
+.countdown.paused span {
+  animation-play-state: paused;
 }
 
 @keyframes show {
@@ -127,5 +224,397 @@ body,
   }
   to {
     opacity: 0;
+  }
+}
+
+.menu-button {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+}
+
+/* Waiting-for-a-rival card. */
+.panel {
+  max-width: min(440px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 22px 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  pointer-events: auto;
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.panel strong {
+  font-size: 24px;
+  color: var(--text);
+}
+
+.panel code {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--text);
+  background: rgb(0 0 0 / 0.3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ---------- landing page ---------- */
+
+.landing {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 24px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  text-align: center;
+  pointer-events: auto;
+  /* Darkens the arena turning behind, more so at the edges. */
+  background: radial-gradient(900px 600px at 50% 45%, rgb(10 11 28 / 0.45), rgb(10 11 28 / 0.88));
+  animation: rise 500ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: clamp(64px, 14vw, 132px);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  background: linear-gradient(100deg, var(--blue) 0%, #a78bfa 50%, var(--red) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 10px 30px rgb(109 94 252 / 0.45));
+}
+
+.brand p {
+  margin: 14px 0 0;
+  font-size: clamp(16px, 2.4vw, 20px);
+  color: var(--muted);
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  width: min(620px, 100%);
+}
+
+.hud button.card {
+  flex: 1 1 240px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 22px;
+  text-align: left;
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+}
+
+.hud button.card:hover {
+  transform: translateY(-4px);
+  border-color: rgb(255 255 255 / 0.3);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.4);
+}
+
+.card-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 10px;
+  font-size: 24px;
+  color: #0a0b1c;
+  border-radius: 13px;
+}
+
+.card-icon.solo {
+  background: linear-gradient(135deg, #fbbf24, var(--red));
+}
+
+.card-icon.duo {
+  background: linear-gradient(135deg, var(--blue), #a78bfa);
+}
+
+.card strong {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.card > span:last-child {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.hud button.join {
+  padding: 16px 40px;
+  font-size: 20px;
+  border-radius: 16px;
+}
+
+.landing-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.avatars {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.hud button.avatar {
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: capitalize;
+  color: var(--muted);
+  border-radius: 16px;
+}
+
+.avatar img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.hud button.avatar.selected {
+  color: var(--text);
+  border-color: var(--accent-2);
+  background: var(--glass-strong);
+  box-shadow: 0 0 0 2px var(--accent-2), 0 10px 30px rgb(56 189 248 / 0.3);
+}
+
+/* ---------- menu / settings ---------- */
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Above every HUD element; the blurred ones would otherwise paint over the menu. */
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(6 7 20 / 0.6);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  animation: fade 160ms ease-out;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.menu {
+  width: min(400px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: pop 180ms ease-out;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.menu header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.hud button.icon-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 18px;
+  border-radius: 50%;
+}
+
+.menu h3 {
+  margin: 0 0 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.menu .note {
+  margin: -8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Rows sit in one rounded block, separated by hairlines. */
+.menu .group {
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.menu .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.menu label.row {
+  cursor: pointer;
+}
+
+.menu .row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  background: rgb(255 255 255 / 0.16);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+  transition: transform 160ms ease;
+}
+
+.switch:checked {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.switch:checked::before {
+  transform: translateX(18px);
+}
+
+.menu input[type='range'] {
+  appearance: none;
+  flex: none;
+  width: 150px;
+  height: 6px;
+  margin: 0;
+  /* The gradient is the filled part; its width is set inline from the value. */
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)) no-repeat rgb(255 255 255 / 0.16);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.menu input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+.menu input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+.menu footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu footer .primary {
+  padding: 13px;
+  font-size: 17px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing,
+  .menu,
+  .menu-backdrop {
+    animation: none;
+  }
+
+  .hud button {
+    transition: none;
   }
 }

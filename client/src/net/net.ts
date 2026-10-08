@@ -3,23 +3,11 @@ import type { ClientMsg, PlayerState, Scores, ServerMsg } from '@plonko/shared'
 import { sfx } from '../audio/sfx'
 import { burst } from '../game/effects'
 import { fighters } from '../game/fighters'
+import { useSettings } from '../game/settings'
 import { fx, useGame } from '../game/store'
 import { tuning } from '../game/tuning'
 
 const URL_ = import.meta.env.VITE_WS_URL ?? `ws://${location.hostname}:${DEFAULT_PORT}`
-const ROOM = roomFromUrl()
-
-// The room code lives in the URL, so the address bar is always the invite link.
-function roomFromUrl() {
-  const url = new URL(location.href)
-  let room = url.searchParams.get('room')
-  if (!room) {
-    room = Math.random().toString(36).slice(2, 6)
-    url.searchParams.set('room', room)
-    history.replaceState(null, '', url)
-  }
-  return room
-}
 const RECONNECT_MS = 2000
 const BUFFER_MS = 1000
 
@@ -28,7 +16,10 @@ export type Snapshot = PlayerState & { t: number }
 // Recent states per remote player, stamped with local receive time, oldest first.
 export const snapshots = new Map<string, Snapshot[]>()
 
-export const netStats = { connected: false, ping: 0, recvHz: 0, room: ROOM }
+// full: the room already had its two players, so we were turned away.
+export const netStats = { connected: false, full: false, ping: 0, recvHz: 0 }
+
+let room = ''
 
 let ws: WebSocket | null = null
 let lastDeliverAt = 0
@@ -74,11 +65,11 @@ function onMessage(msg: ServerMsg) {
       useGame.setState({ selfId: msg.id, slot: msg.slot, peers: msg.peers })
       break
     case 'joined':
-      useGame.setState({ peers: [...g.peers, { id: msg.id, slot: msg.slot }] })
+      useGame.setState({ peers: [...g.peers, { id: msg.id, slot: msg.slot, avatar: msg.avatar }], rivalLeft: false })
       break
     case 'left':
       snapshots.delete(msg.id)
-      useGame.setState({ peers: g.peers.filter((p) => p.id !== msg.id) })
+      useGame.setState({ peers: g.peers.filter((p) => p.id !== msg.id), rivalLeft: true })
       break
     case 'state': {
       received++
@@ -121,7 +112,7 @@ function onMessage(msg: ServerMsg) {
       netStats.ping = Math.round(performance.now() - msg.t)
       break
     case 'full':
-      console.warn(`Room "${ROOM}" is full`)
+      netStats.full = true
       break
   }
 }
@@ -131,26 +122,29 @@ function open() {
   ws = socket
   socket.onopen = () => {
     netStats.connected = true
-    socket.send(JSON.stringify({ type: 'join', room: ROOM } satisfies ClientMsg))
+    socket.send(JSON.stringify({ type: 'join', room, avatar: useSettings.getState().avatar } satisfies ClientMsg))
   }
   socket.onmessage = (e) => onMessage(JSON.parse(e.data))
   socket.onclose = () => {
     goOffline()
-    setTimeout(open, RECONNECT_MS)
+    if (!netStats.full) setTimeout(open, RECONNECT_MS)
   }
 }
 
-// A fighter simulated on this client fell off. Offline that ends the round here; online the
+// A fighter simulated on this client fell off. Solo that ends the round here; online the
 // server decides, and only our own fall is ours to report.
 export function reportFall(id: string) {
   const g = useGame.getState()
-  if (g.peers.length === 0) g.localKnockout(id === 'me' ? 'me' : 'bot')
-  else if (id === 'me') send({ type: 'eliminated' })
+  if (g.mode === 'solo') g.localKnockout(id === 'me' ? 'me' : 'bot')
+  else if (id !== 'me') return
+  else if (g.peers.length > 0) send({ type: 'eliminated' })
+  // Alone in the room while waiting for a rival: just put the player back.
+  else g.beginRound()
 }
 
 export function requestRematch() {
   const g = useGame.getState()
-  if (g.peers.length === 0) g.localRematch()
+  if (g.mode === 'solo') g.localRematch()
   else send({ type: 'rematch' })
 }
 
@@ -158,7 +152,18 @@ export function sendHit(target: string, dvx: number, dvz: number, up: number) {
   send({ type: 'hit', target, impulse: [dvx, up, dvz] })
 }
 
-export function connect() {
+// Enters online play: joins the room named in the URL, or makes a new one and puts its code
+// in the URL so the address bar becomes the invite link.
+export function startOnline() {
+  if (room) return
+  const url = new URL(location.href)
+  room = url.searchParams.get('room') ?? ''
+  if (!room) {
+    room = Math.random().toString(36).slice(2, 6)
+    url.searchParams.set('room', room)
+    history.replaceState(null, '', url)
+  }
+  useGame.getState().beginRound({ mode: 'online', scores: { me: 0, them: 0 }, match: null })
   open()
 
   setInterval(() => {

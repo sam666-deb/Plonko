@@ -9,17 +9,21 @@ export const COUNTDOWN_MS = 1500
 // Round wins needed to take the match.
 export const WINS_TO_MATCH = 3
 
+// The playable characters. A player's choice is sent when they join a room.
+export const AVATARS = ['warrior', 'rogue', 'mage', 'minion'] as const
+export type Avatar = (typeof AVATARS)[number]
+
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
 
 // p: position, v: velocity on the ground plane, h: facing direction, d: currently dashing.
 export type PlayerState = { p: Vec3; v: Vec2; h: Vec2; d: boolean }
 
-export type Peer = { id: string; slot: number }
+export type Peer = { id: string; slot: number; avatar: Avatar }
 export type Scores = Record<string, number>
 
 export type ClientMsg =
-  | { type: 'join'; room: string }
+  | { type: 'join'; room: string; avatar: Avatar }
   | ({ type: 'state' } & PlayerState)
   // impulse: the velocity change the target should apply to itself.
   | { type: 'hit'; target: string; impulse: Vec3 }
@@ -30,7 +34,7 @@ export type ClientMsg =
 export type ServerMsg =
   | { type: 'welcome'; id: string; slot: number; peers: Peer[] }
   | { type: 'full' }
-  | { type: 'joined'; id: string; slot: number }
+  | ({ type: 'joined' } & Peer)
   | { type: 'left'; id: string }
   | ({ type: 'state'; id: string } & PlayerState)
   | { type: 'hit'; from: string; impulse: Vec3 }

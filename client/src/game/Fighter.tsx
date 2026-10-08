@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { CapsuleCollider, RigidBody, interactionGroups, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
-import type { Group, MeshStandardMaterial } from 'three'
+import type { Avatar } from '@plonko/shared'
+import type { Group, MeshBasicMaterial } from 'three'
 import { Color } from 'three'
 import { sfx } from '../audio/sfx'
 import { reportFall } from '../net/net'
 import { KO_Y, burst, knockoutEffect } from './effects'
+import { ATTACK_ANIM_S } from './Character'
+import type { Anim } from './Character'
 import { FighterMesh } from './FighterMesh'
 import { fighters, poseFighter } from './fighters'
 import type { Intent } from './fighters'
@@ -27,21 +30,24 @@ const approach = (current: number, target: number, maxDelta: number) =>
 
 type Props = {
   id: 'me' | 'bot'
+  avatar: Avatar
   color: string
   spawn: [number, number]
   getIntent: (self: RapierRigidBody) => Intent
 }
 
-export function Fighter({ id, color, spawn, getIntent }: Props) {
+export function Fighter({ id, avatar, color, spawn, getIntent }: Props) {
   const body = useRef<RapierRigidBody>(null)
   const visual = useRef<Group>(null)
-  const material = useRef<MeshStandardMaterial>(null)
+  const ring = useRef<MeshBasicMaterial>(null)
   const round = useGame((s) => s.round)
 
   const state = useRef({
     headingX: 0,
     headingZ: 1,
     dashTimer: 0,
+    // Counts down from the start of a dash; the weapon swing outlasts the dash itself.
+    attack: 0,
     cooldown: 0,
     stun: 0,
     stagger: 0,
@@ -94,7 +100,7 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
     if (!b) return
     const s = state.current
     const len = Math.hypot(spawn[0], spawn[1]) || 1
-    Object.assign(s, { dashTimer: 0, cooldown: 0, stun: 0, stagger: 0, squash: 0, koShown: false, dead: false })
+    Object.assign(s, { dashTimer: 0, attack: 0, cooldown: 0, stun: 0, stagger: 0, squash: 0, koShown: false, dead: false })
     s.headingX = -spawn[0] / len
     s.headingZ = -spawn[1] / len
     b.setTranslation({ x: spawn[0], y: REST_Y + 0.5, z: spawn[1] }, true)
@@ -220,6 +226,7 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
 
     s.cooldown = Math.max(0, s.cooldown - STEP)
     s.stagger = Math.max(0, s.stagger - STEP)
+    s.attack = Math.max(0, s.attack - STEP)
 
     // Input is read even when ignored, so a dash pressed during the countdown is not saved up.
     const input = getIntent(b)
@@ -240,6 +247,7 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
     if (intent.dash && s.cooldown <= 0 && s.dashTimer <= 0 && s.stun <= 0) {
       s.dashTimer = t.dashDuration
       s.cooldown = t.dashCooldown
+      s.attack = ATTACK_ANIM_S
       s.hitLanded = false
       sfx.dash(id === 'me' ? 1 : 0.6)
       burst({ x: p.x, y: p.y - 0.6, z: p.z, count: 8, color, speed: 2, dirX: -s.headingX, dirZ: -s.headingZ, push: 3 })
@@ -280,9 +288,26 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
     const s = state.current
     s.squash = Math.max(0, s.squash - dt * 5)
     if (visual.current) poseFighter(visual.current, s.headingX, s.headingZ, s.squash, s.dashTimer > 0)
-    // Dimmed while the dash is on cooldown.
-    material.current?.color.copy(baseColor).multiplyScalar(s.cooldown > 0 ? 0.45 : 1)
+    // The ring at the fighter's feet dims while the dash recharges.
+    ring.current?.color.copy(baseColor).multiplyScalar(s.cooldown > 0 ? 0.35 : 1)
   })
+
+  // Which animation the model should be playing, from what the fighter is doing right now.
+  function getAnim(): Anim {
+    const b = body.current
+    if (!b) return 'idle'
+    const s = state.current
+    const g = useGame.getState()
+    if (b.translation().y < REST_Y - 0.5) return 'fall'
+    if (s.stun > 0) return 'hit'
+    if (s.attack > 0) return 'attack'
+    // "won" and "Knockout!" are from the local player's side, so the bot reacts the opposite way.
+    const mine = id === 'me'
+    if (g.match) return (g.match === 'won') === mine ? 'cheer' : 'defeat'
+    if (g.banner) return (g.banner === 'Knockout!') === mine ? 'taunt' : 'idle'
+    const v = b.linvel()
+    return Math.hypot(v.x, v.z) > 1 ? 'run' : 'idle'
+  }
 
   return (
     <RigidBody
@@ -300,7 +325,7 @@ export function Fighter({ id, color, spawn, getIntent }: Props) {
         restitution={0}
         collisionGroups={FIGHTER_GROUPS}
       />
-      <FighterMesh color={color} groupRef={visual} materialRef={material} />
+      <FighterMesh avatar={avatar} color={color} getAnim={getAnim} groupRef={visual} ringRef={ring} />
     </RigidBody>
   )
 }

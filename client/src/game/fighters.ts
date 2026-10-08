@@ -24,7 +24,7 @@ export const fighters = new Map<FighterId, FighterHandle>()
 
 // Squash on impact, stretch along the facing direction while dashing.
 export function poseFighter(g: Group, headingX: number, headingZ: number, squash: number, dashing: boolean) {
-  const stretch = dashing ? 0.25 : 0
+  const stretch = dashing ? 0.1 : 0
   g.rotation.y = Math.atan2(headingX, headingZ)
   g.scale.set(1 + 0.3 * squash - stretch * 0.4, 1 - 0.35 * squash - stretch * 0.2, 1 + 0.3 * squash + stretch)
 }

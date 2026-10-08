@@ -5,7 +5,7 @@ const held = new Set<string>()
 let dashQueued = false
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') {
+  if (e.code === 'Space' && !useGame.getState().menuOpen) {
     e.preventDefault()
     // A clicked HUD button keeps focus, and Space would press it again instead of dashing.
     if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur()

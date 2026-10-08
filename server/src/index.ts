@@ -1,13 +1,13 @@
 import { randomBytes } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import type { WebSocket } from 'ws'
-import { DEFAULT_PORT, MAX_PLAYERS, ROUND_RESET_MS, WINS_TO_MATCH } from '@plonko/shared'
-import type { ClientMsg, Scores, ServerMsg } from '@plonko/shared'
+import { AVATARS, DEFAULT_PORT, MAX_PLAYERS, ROUND_RESET_MS, WINS_TO_MATCH } from '@plonko/shared'
+import type { Avatar, ClientMsg, Scores, ServerMsg } from '@plonko/shared'
 
 // Relay only: clients simulate their own physics. The server owns who is in a room,
 // the score, and when a round or match ends and restarts.
 
-type Player = { id: string; slot: number; ws: WebSocket }
+type Player = { id: string; slot: number; avatar: Avatar; ws: WebSocket }
 type Room = {
   players: Map<string, Player>
   scores: Scores
@@ -47,7 +47,7 @@ function startRound(room: Room, newMatch: boolean) {
   broadcast(room, { type: 'roundStart', round: room.round, scores: room.scores })
 }
 
-function join(ws: WebSocket, code: string): { room: Room; player: Player } | null {
+function join(ws: WebSocket, code: string, avatar: Avatar): { room: Room; player: Player } | null {
   let room = rooms.get(code)
   if (!room) {
     room = { players: new Map(), scores: {}, round: 0, resolving: false, ended: false }
@@ -63,12 +63,12 @@ function join(ws: WebSocket, code: string): { room: Room; player: Player } | nul
   let slot = 0
   while (taken.has(slot)) slot++
 
-  const player: Player = { id: randomBytes(4).toString('hex'), slot, ws }
-  const peers = [...room.players.values()].map((p) => ({ id: p.id, slot: p.slot }))
+  const player: Player = { id: randomBytes(4).toString('hex'), slot, avatar, ws }
+  const peers = [...room.players.values()].map((p) => ({ id: p.id, slot: p.slot, avatar: p.avatar }))
   room.players.set(player.id, player)
 
   send(ws, { type: 'welcome', id: player.id, slot, peers })
-  broadcast(room, { type: 'joined', id: player.id, slot }, player.id)
+  broadcast(room, { type: 'joined', id: player.id, slot, avatar }, player.id)
   startRound(room, true)
   return { room, player }
 }
@@ -95,7 +95,7 @@ wss.on('connection', (ws) => {
     if (msg.type === 'join') {
       if (session || typeof msg.room !== 'string' || !msg.room) return
       code = msg.room.slice(0, 32)
-      session = join(ws, code)
+      session = join(ws, code, AVATARS.includes(msg.avatar) ? msg.avatar : 'minion')
       return
     }
     if (!session) return

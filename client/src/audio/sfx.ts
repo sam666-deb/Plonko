@@ -1,26 +1,25 @@
 // All sound effects are synthesised with Web Audio, so there are no audio files to download.
 
-const MUTE_KEY = 'plonko-muted'
+import { useSettings } from '../game/settings'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
 let noiseBuffer: AudioBuffer | null = null
-let muted = readMuted()
 
-function readMuted() {
-  try {
-    return localStorage.getItem(MUTE_KEY) === '1'
-  } catch {
-    return false
-  }
+const outputGain = () => {
+  const s = useSettings.getState()
+  return s.muted ? 0 : s.volume * 0.7
 }
+useSettings.subscribe(() => {
+  if (master) master.gain.value = outputGain()
+})
 
 // Browsers only allow audio after the player has interacted with the page.
 function unlock() {
   if (!ctx) {
     ctx = new AudioContext()
     master = ctx.createGain()
-    master.gain.value = muted ? 0 : 0.5
+    master.gain.value = outputGain()
     master.connect(ctx.destination)
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate)
     const data = noiseBuffer.getChannelData(0)
@@ -30,18 +29,6 @@ function unlock() {
 }
 window.addEventListener('keydown', unlock)
 window.addEventListener('pointerdown', unlock)
-
-export const isMuted = () => muted
-
-export function setMuted(value: boolean) {
-  muted = value
-  if (master) master.gain.value = muted ? 0 : 0.5
-  try {
-    localStorage.setItem(MUTE_KEY, muted ? '1' : '0')
-  } catch {
-    // Storage can be unavailable (private windows); the setting then lasts for this visit only.
-  }
-}
 
 // Fades a gain node from `gain` to silence over `dur` seconds and connects it to the output.
 function envelope(gain: number, start: number, dur: number) {
@@ -87,6 +74,9 @@ export const sfx = {
   hit: (strength: number) => {
     tone('sine', 170, 45, 0.25, 0.8 * strength)
     noise('lowpass', 2200, 250, 0.14, 0.6 * strength)
+    // The ring of a weapon connecting.
+    tone('triangle', 1900, 1400, 0.18, 0.18 * strength)
+    tone('square', 2850, 2600, 0.09, 0.05 * strength)
   },
   bump: (strength: number) => tone('sine', 120, 60, 0.1, 0.35 * strength),
   fall: () => tone('triangle', 520, 80, 0.6, 0.25),
