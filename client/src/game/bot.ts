@@ -1,6 +1,7 @@
 import type { RapierRigidBody } from '@react-three/rapier'
 import { fighters } from './fighters'
 import type { Intent } from './fighters'
+import { arena } from './store'
 import { tuning } from './tuning'
 
 const STEP = 1 / 60
@@ -14,7 +15,7 @@ export function botIntent(self: RapierRigidBody): Intent {
   let z = -me.z
   let dash = false
 
-  const nearEdge = Math.hypot(me.x, me.z) > tuning.arenaRadius * 0.75
+  const nearEdge = Math.hypot(me.x, me.z) > arena.radius * 0.75
   if (target && target.y > 0 && !nearEdge) {
     x = target.x - me.x
     z = target.z - me.z

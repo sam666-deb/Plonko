@@ -1,11 +1,15 @@
+import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { CylinderCollider, Physics, RigidBody } from '@react-three/rapier'
+import { CylinderCollider, Physics, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
+import type { RapierCollider } from '@react-three/rapier'
+import type { Mesh } from 'three'
 import { keyboardIntent } from '../input/keyboard'
 import { botIntent } from './bot'
 import { Fighter } from './Fighter'
+import { Particles } from './Particles'
 import { RemoteFighter } from './RemoteFighter'
-import { fx, sideOf, useGame } from './store'
-import { useTuning } from './tuning'
+import { arena, fx, sideOf, useGame } from './store'
+import { tuning, useTuning } from './tuning'
 
 const CAMERA_POS: [number, number, number] = [0, 15, 12]
 const PLATFORM_HALF_HEIGHT = 0.25
@@ -15,11 +19,28 @@ const SPAWNS: [number, number][] = [
 ]
 const COLORS = ['#38bdf8', '#f87171']
 
+// The platform shrinks as the round goes on, so a round cannot be stalled out.
 function Arena({ radius }: { radius: number }) {
+  const collider = useRef<RapierCollider>(null)
+  const mesh = useRef<Mesh>(null)
+
+  useBeforePhysicsStep(() => {
+    const g = useGame.getState()
+    // Hold the size once the round is decided, so the result is not changed by a late shrink.
+    if (g.banner || g.match) return
+    const elapsed = (performance.now() - g.playAt) / 1000 - tuning.shrinkDelay
+    const k = Math.min(1, Math.max(0, elapsed / tuning.shrinkTime))
+    const r = radius + (Math.min(tuning.minRadius, radius) - radius) * k
+    if (r === arena.radius) return
+    arena.radius = r
+    collider.current?.setRadius(r)
+    mesh.current?.scale.set(r / radius, 1, r / radius)
+  })
+
   return (
     <RigidBody type="fixed" colliders={false} position={[0, -PLATFORM_HALF_HEIGHT, 0]}>
-      <CylinderCollider args={[PLATFORM_HALF_HEIGHT, radius]} friction={0} />
-      <mesh receiveShadow>
+      <CylinderCollider ref={collider} args={[PLATFORM_HALF_HEIGHT, radius]} friction={0} />
+      <mesh ref={mesh} receiveShadow>
         <cylinderGeometry args={[radius, radius, PLATFORM_HALF_HEIGHT * 2, 48]} />
         <meshStandardMaterial color="#9ca3af" />
       </mesh>
@@ -56,6 +77,7 @@ export function Game() {
         <orthographicCamera attach="shadow-camera" args={[-16, 16, 16, -16, 1, 40]} />
       </directionalLight>
       <CameraRig />
+      <Particles />
       <Physics gravity={[0, -t.gravity, 0]} paused={frozen}>
         <Arena key={t.arenaRadius} radius={t.arenaRadius} />
         <Fighter id="me" color={COLORS[slot]} spawn={SPAWNS[slot]} getIntent={keyboardIntent} />

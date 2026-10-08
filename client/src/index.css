@@ -39,3 +39,93 @@ body,
   text-align: center;
   line-height: 1.6;
 }
+
+.top {
+  text-align: center;
+}
+
+.goal {
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.hud button {
+  pointer-events: auto;
+  font: inherit;
+  font-weight: 600;
+  color: #f9fafb;
+  background: #374151;
+  border: 1px solid #6b7280;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.hud button:hover {
+  background: #4b5563;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.result button {
+  font-size: 20px;
+  padding: 12px 28px;
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* "Ready…" shows for the countdown, then "Go!" flashes as control is handed over. */
+.countdown {
+  display: grid;
+  place-items: center;
+}
+
+.countdown span {
+  grid-area: 1 / 1;
+  opacity: 0;
+}
+
+.countdown .ready {
+  animation: show var(--countdown) steps(1, end);
+}
+
+.countdown .go {
+  animation: show 500ms steps(1, end) var(--countdown);
+}
+
+@keyframes show {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* White flash on a knockout. */
+.flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  animation: flash 350ms ease-out;
+}
+
+@keyframes flash {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0;
+  }
+}

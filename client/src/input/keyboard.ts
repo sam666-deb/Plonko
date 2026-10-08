@@ -7,6 +7,8 @@ let dashQueued = false
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault()
+    // A clicked HUD button keeps focus, and Space would press it again instead of dashing.
+    if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur()
     if (!e.repeat) dashQueued = true
   }
   held.add(e.code)

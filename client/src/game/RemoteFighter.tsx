@@ -1,22 +1,25 @@
 import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { CapsuleCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
+import { RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import type { Group } from 'three'
+import { sfx } from '../audio/sfx'
 import { sampleRemote, sendHit } from '../net/net'
+import { KO_Y, burst, knockoutEffect } from './effects'
 import { FighterMesh } from './FighterMesh'
 import { fighters, poseFighter } from './fighters'
 import { useGame } from './store'
-import { CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS, REST_Y } from './tuning'
+import { REST_Y } from './tuning'
 
 type Props = { id: string; color: string; spawn: [number, number] }
 
-// Another player's fighter: a kinematic body that follows their broadcast position.
+// Another player's fighter: a kinematic body that follows their broadcast position. It has no
+// collider; local fighters work out bumps and dash hits against it themselves.
 export function RemoteFighter({ id, color, spawn }: Props) {
   const body = useRef<RapierRigidBody>(null)
   const visual = useRef<Group>(null)
   const round = useGame((s) => s.round)
-  const state = useRef({ headingX: 0, headingZ: 1, dashing: false, squash: 0 })
+  const state = useRef({ headingX: 0, headingZ: 1, velX: 0, velZ: 0, dashing: false, squash: 0, koShown: false })
 
   useEffect(() => {
     const b = body.current
@@ -26,16 +29,19 @@ export function RemoteFighter({ id, color, spawn }: Props) {
       remote: true,
       hitPower: () => 1,
       heading: () => [state.current.headingX, state.current.headingZ],
+      velocity: () => [state.current.velX, state.current.velZ],
       isDashing: () => state.current.dashing,
-      takeHit: (dirX, dirZ, power) => {
+      takeHit: (dvx, dvz, up) => {
         state.current.squash = 1
-        sendHit(id, dirX, dirZ, power)
+        sendHit(id, dvx, dvz, up)
       },
+      push: () => {},
     })
     return () => void fighters.delete(id)
   }, [id])
 
   useEffect(() => {
+    state.current.koShown = false
     body.current?.setTranslation({ x: spawn[0], y: REST_Y, z: spawn[1] }, true)
   }, [round, spawn])
 
@@ -46,8 +52,20 @@ export function RemoteFighter({ id, color, spawn }: Props) {
     const s = state.current
     s.headingX = snap.h[0]
     s.headingZ = snap.h[1]
+    s.velX = snap.v[0]
+    s.velZ = snap.v[1]
+    const [x, y, z] = snap.p
+    if (snap.d && !s.dashing) {
+      sfx.dash(0.6)
+      burst({ x, y: y - 0.6, z, count: 8, color, speed: 2, dirX: -snap.h[0], dirZ: -snap.h[1], push: 3 })
+    }
+    if (snap.d) burst({ x, y: y - 0.3, z, count: 1, color, speed: 0.6, up: 0.3, life: 0.3, size: 0.2 })
+    if (y < KO_Y && !s.koShown) {
+      s.koShown = true
+      knockoutEffect(x, z, color)
+    }
     s.dashing = snap.d
-    b.setNextKinematicTranslation({ x: snap.p[0], y: snap.p[1], z: snap.p[2] })
+    b.setNextKinematicTranslation({ x, y, z })
   })
 
   useFrame((_, dt) => {
@@ -58,7 +76,6 @@ export function RemoteFighter({ id, color, spawn }: Props) {
 
   return (
     <RigidBody ref={body} type="kinematicPosition" colliders={false} position={[spawn[0], REST_Y, spawn[1]]}>
-      <CapsuleCollider args={[CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS]} friction={0} restitution={0} />
       <FighterMesh color={color} groupRef={visual} />
     </RigidBody>
   )

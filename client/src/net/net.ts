@@ -1,11 +1,25 @@
 import { DEFAULT_PORT, STATE_HZ } from '@plonko/shared'
 import type { ClientMsg, PlayerState, Scores, ServerMsg } from '@plonko/shared'
+import { sfx } from '../audio/sfx'
+import { burst } from '../game/effects'
 import { fighters } from '../game/fighters'
 import { fx, useGame } from '../game/store'
 import { tuning } from '../game/tuning'
 
 const URL_ = import.meta.env.VITE_WS_URL ?? `ws://${location.hostname}:${DEFAULT_PORT}`
-const ROOM = new URLSearchParams(location.search).get('room') ?? 'dev'
+const ROOM = roomFromUrl()
+
+// The room code lives in the URL, so the address bar is always the invite link.
+function roomFromUrl() {
+  const url = new URL(location.href)
+  let room = url.searchParams.get('room')
+  if (!room) {
+    room = Math.random().toString(36).slice(2, 6)
+    url.searchParams.set('room', room)
+    history.replaceState(null, '', url)
+  }
+  return room
+}
 const RECONNECT_MS = 2000
 const BUFFER_MS = 1000
 
@@ -50,7 +64,7 @@ function goOffline() {
   snapshots.clear()
   const g = useGame.getState()
   if (g.selfId === null && g.peers.length === 0) return
-  useGame.setState({ selfId: null, slot: 0, peers: [], scores: { me: 0, them: 0 }, banner: null, round: g.round + 1 })
+  g.beginRound({ selfId: null, slot: 0, peers: [], scores: { me: 0, them: 0 }, match: null })
 }
 
 function onMessage(msg: ServerMsg) {
@@ -70,17 +84,25 @@ function onMessage(msg: ServerMsg) {
       received++
       const now = performance.now()
       const buf = snapshots.get(msg.id) ?? []
-      buf.push({ t: now, p: msg.p, h: msg.h, d: msg.d })
+      buf.push({ t: now, p: msg.p, v: msg.v, h: msg.h, d: msg.d })
       while (buf.length > 2 && buf[0].t < now - BUFFER_MS) buf.shift()
       snapshots.set(msg.id, buf)
       break
     }
-    case 'hit':
-      fighters.get('me')?.takeHit(msg.dir[0], msg.dir[1], msg.power)
+    case 'hit': {
+      const me = fighters.get('me')
+      if (!me) break
+      const at = me.body.translation()
+      me.takeHit(msg.impulse[0], msg.impulse[2], msg.impulse[1])
+      burst({ x: at.x, y: at.y + 0.2, z: at.z, count: 14, color: '#fde68a', speed: 4, up: 2 })
       fx.shake = tuning.shake
+      sfx.hit(Math.min(1.5, Math.hypot(msg.impulse[0], msg.impulse[2]) / 10))
       g.hitstop(tuning.hitstopMs)
       break
+    }
     case 'roundEnd':
+      if (msg.loser === g.selfId) sfx.roundLost()
+      else sfx.roundWon()
       useGame.setState({
         scores: applyScores(msg.scores),
         banner: msg.loser === g.selfId ? 'You fell!' : 'Knockout!',
@@ -88,7 +110,12 @@ function onMessage(msg: ServerMsg) {
       break
     case 'roundStart':
       snapshots.clear()
-      useGame.setState({ scores: applyScores(msg.scores), banner: null, round: g.round + 1 })
+      g.beginRound({ scores: applyScores(msg.scores), match: null })
+      break
+    case 'matchEnd':
+      if (msg.winner === g.selfId) sfx.matchWon()
+      else sfx.matchLost()
+      useGame.setState({ scores: applyScores(msg.scores), banner: null, match: msg.winner === g.selfId ? 'won' : 'lost' })
       break
     case 'pong':
       netStats.ping = Math.round(performance.now() - msg.t)
@@ -121,8 +148,14 @@ export function reportFall(id: string) {
   else if (id === 'me') send({ type: 'eliminated' })
 }
 
-export function sendHit(target: string, dirX: number, dirZ: number, power: number) {
-  send({ type: 'hit', target, dir: [dirX, dirZ], power })
+export function requestRematch() {
+  const g = useGame.getState()
+  if (g.peers.length === 0) g.localRematch()
+  else send({ type: 'rematch' })
+}
+
+export function sendHit(target: string, dvx: number, dvz: number, up: number) {
+  send({ type: 'hit', target, impulse: [dvx, up, dvz] })
 }
 
 export function connect() {
@@ -132,7 +165,7 @@ export function connect() {
     const me = fighters.get('me')
     if (!me || useGame.getState().peers.length === 0) return
     const p = me.body.translation()
-    send({ type: 'state', p: [p.x, p.y, p.z], h: me.heading(), d: me.isDashing() })
+    send({ type: 'state', p: [p.x, p.y, p.z], v: me.velocity(), h: me.heading(), d: me.isDashing() })
   }, 1000 / STATE_HZ)
 
   setInterval(() => {
@@ -157,6 +190,7 @@ export function sampleRemote(id: string): PlayerState | null {
     const k = (at - a.t) / (b.t - a.t || 1)
     return {
       p: [a.p[0] + (b.p[0] - a.p[0]) * k, a.p[1] + (b.p[1] - a.p[1]) * k, a.p[2] + (b.p[2] - a.p[2]) * k],
+      v: a.v,
       h: b.h,
       d: a.d,
     }

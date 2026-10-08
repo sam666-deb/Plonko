@@ -1,14 +1,26 @@
 import { randomBytes } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import type { WebSocket } from 'ws'
-import { DEFAULT_PORT, MAX_PLAYERS, ROUND_RESET_MS } from '@plonko/shared'
+import { DEFAULT_PORT, MAX_PLAYERS, ROUND_RESET_MS, WINS_TO_MATCH } from '@plonko/shared'
 import type { ClientMsg, Scores, ServerMsg } from '@plonko/shared'
 
 // Relay only: clients simulate their own physics. The server owns who is in a room,
-// the score, and when a round ends and restarts.
+// the score, and when a round or match ends and restarts.
 
 type Player = { id: string; slot: number; ws: WebSocket }
-type Room = { players: Map<string, Player>; scores: Scores; round: number; resolving: boolean }
+type Room = {
+  players: Map<string, Player>
+  scores: Scores
+  round: number
+  // A round has been decided and the next one has not started yet.
+  resolving: boolean
+  // Someone has won the match; waiting for a rematch request.
+  ended: boolean
+}
+
+const HEARTBEAT_MS = 15000
+// Largest velocity change a hit may carry, per axis. Real hits are well under this.
+const MAX_IMPULSE = 60
 
 const rooms = new Map<string, Room>()
 const port = Number(process.env.PORT) || DEFAULT_PORT
@@ -22,8 +34,14 @@ const broadcast = (room: Room, msg: ServerMsg, except?: string) => {
   for (const p of room.players.values()) if (p.id !== except) send(p.ws, msg)
 }
 
-function startRound(room: Room, resetScores: boolean) {
-  if (resetScores) for (const id of room.players.keys()) room.scores[id] = 0
+const isVec = (v: unknown, length: number): v is number[] =>
+  Array.isArray(v) && v.length === length && v.every((n) => typeof n === 'number' && Number.isFinite(n))
+
+function startRound(room: Room, newMatch: boolean) {
+  if (newMatch) {
+    for (const id of room.players.keys()) room.scores[id] = 0
+    room.ended = false
+  }
   room.resolving = false
   room.round++
   broadcast(room, { type: 'roundStart', round: room.round, scores: room.scores })
@@ -32,7 +50,7 @@ function startRound(room: Room, resetScores: boolean) {
 function join(ws: WebSocket, code: string): { room: Room; player: Player } | null {
   let room = rooms.get(code)
   if (!room) {
-    room = { players: new Map(), scores: {}, round: 0, resolving: false }
+    room = { players: new Map(), scores: {}, round: 0, resolving: false, ended: false }
     rooms.set(code, room)
   }
   if (room.players.size >= MAX_PLAYERS) {
@@ -55,9 +73,14 @@ function join(ws: WebSocket, code: string): { room: Room; player: Player } | nul
   return { room, player }
 }
 
+const alive = new WeakSet<WebSocket>()
+
 wss.on('connection', (ws) => {
   let session: { room: Room; player: Player } | null = null
   let code = ''
+
+  alive.add(ws)
+  ws.on('pong', () => alive.add(ws))
 
   ws.on('message', (data) => {
     let msg: ClientMsg
@@ -66,10 +89,11 @@ wss.on('connection', (ws) => {
     } catch {
       return
     }
+    if (typeof msg !== 'object' || msg === null) return
 
-    if (msg.type === 'ping') return send(ws, { type: 'pong', t: msg.t })
+    if (msg.type === 'ping') return send(ws, { type: 'pong', t: Number(msg.t) || 0 })
     if (msg.type === 'join') {
-      if (session || typeof msg.room !== 'string') return
+      if (session || typeof msg.room !== 'string' || !msg.room) return
       code = msg.room.slice(0, 32)
       session = join(ws, code)
       return
@@ -79,19 +103,39 @@ wss.on('connection', (ws) => {
 
     switch (msg.type) {
       case 'state':
-        broadcast(room, { type: 'state', id: player.id, p: msg.p, h: msg.h, d: msg.d }, player.id)
+        if (!isVec(msg.p, 3) || !isVec(msg.v, 2) || !isVec(msg.h, 2)) break
+        broadcast(room, { type: 'state', id: player.id, p: msg.p, v: msg.v, h: msg.h, d: Boolean(msg.d) }, player.id)
         break
       case 'hit': {
         const target = room.players.get(msg.target)
-        if (target) send(target.ws, { type: 'hit', from: player.id, dir: msg.dir, power: msg.power })
+        if (!target || target === player || !isVec(msg.impulse, 3) || room.resolving || room.ended) break
+        const [x, y, z] = msg.impulse.map((n) => Math.max(-MAX_IMPULSE, Math.min(MAX_IMPULSE, n)))
+        send(target.ws, { type: 'hit', from: player.id, impulse: [x, y, z] })
         break
       }
-      case 'eliminated':
-        if (room.resolving || room.players.size < 2) break
+      case 'eliminated': {
+        if (room.resolving || room.ended || room.players.size < 2) break
+        let winner = ''
+        for (const id of room.players.keys()) {
+          if (id === player.id) continue
+          room.scores[id]++
+          if (room.scores[id] >= WINS_TO_MATCH) winner = id
+        }
+        if (winner) {
+          room.ended = true
+          broadcast(room, { type: 'matchEnd', winner, scores: room.scores })
+          break
+        }
         room.resolving = true
-        for (const id of room.players.keys()) if (id !== player.id) room.scores[id]++
         broadcast(room, { type: 'roundEnd', loser: player.id, scores: room.scores })
-        setTimeout(() => rooms.get(code) === room && startRound(room, false), ROUND_RESET_MS)
+        setTimeout(() => {
+          // Skip if a join, leave or rematch has already started a newer round.
+          if (rooms.get(code) === room && room.resolving) startRound(room, false)
+        }, ROUND_RESET_MS)
+        break
+      }
+      case 'rematch':
+        if (room.ended) startRound(room, true)
         break
     }
   })
@@ -109,5 +153,17 @@ wss.on('connection', (ws) => {
     startRound(room, true)
   })
 })
+
+// Drop connections that have gone silent, so a vanished player frees their slot.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!alive.has(ws)) {
+      ws.terminate()
+      continue
+    }
+    alive.delete(ws)
+    ws.ping()
+  }
+}, HEARTBEAT_MS)
 
 console.log(`Plonko relay listening on ws://localhost:${port}`)

@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@plonko/shared": "*",
+    "tsx": "^4.19.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/ws": "^8.5.13",
-    "tsx": "^4.19.0",
     "typescript": "~6.0.2"
   }
 }

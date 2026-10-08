@@ -11,8 +11,12 @@ export type FighterHandle = {
   // Multiplier on the knockback this fighter deals.
   hitPower: () => number
   heading: () => [number, number]
+  velocity: () => [number, number]
   isDashing: () => boolean
-  takeHit: (dirX: number, dirZ: number, power: number) => void
+  // A dash landed on this fighter: add the velocity change, pop it upward and stun it.
+  takeHit: (dvx: number, dvz: number, up: number) => void
+  // The other half of a body-to-body bump. Does nothing on a proxy, whose owner works out its own half.
+  push: (dvx: number, dvz: number) => void
 }
 
 // Every live fighter, so dash hits, the bot and the network layer can find the others.

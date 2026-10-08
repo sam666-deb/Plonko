@@ -4,12 +4,16 @@ export const DEFAULT_PORT = 8787
 export const MAX_PLAYERS = 2
 export const STATE_HZ = 20
 export const ROUND_RESET_MS = 900
+// Pause at the start of each round before fighters can move.
+export const COUNTDOWN_MS = 1500
+// Round wins needed to take the match.
+export const WINS_TO_MATCH = 3
 
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
 
-// p: position, h: facing direction on the ground plane, d: currently dashing.
-export type PlayerState = { p: Vec3; h: Vec2; d: boolean }
+// p: position, v: velocity on the ground plane, h: facing direction, d: currently dashing.
+export type PlayerState = { p: Vec3; v: Vec2; h: Vec2; d: boolean }
 
 export type Peer = { id: string; slot: number }
 export type Scores = Record<string, number>
@@ -17,8 +21,10 @@ export type Scores = Record<string, number>
 export type ClientMsg =
   | { type: 'join'; room: string }
   | ({ type: 'state' } & PlayerState)
-  | { type: 'hit'; target: string; dir: Vec2; power: number }
+  // impulse: the velocity change the target should apply to itself.
+  | { type: 'hit'; target: string; impulse: Vec3 }
   | { type: 'eliminated' }
+  | { type: 'rematch' }
   | { type: 'ping'; t: number }
 
 export type ServerMsg =
@@ -27,7 +33,8 @@ export type ServerMsg =
   | { type: 'joined'; id: string; slot: number }
   | { type: 'left'; id: string }
   | ({ type: 'state'; id: string } & PlayerState)
-  | { type: 'hit'; from: string; dir: Vec2; power: number }
+  | { type: 'hit'; from: string; impulse: Vec3 }
   | { type: 'roundEnd'; loser: string; scores: Scores }
   | { type: 'roundStart'; round: number; scores: Scores }
+  | { type: 'matchEnd'; winner: string; scores: Scores }
   | { type: 'pong'; t: number }
