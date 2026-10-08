@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "concurrently -n server,client -c magenta,cyan \"npm run dev -w @plonko/server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
+    "publish": "npm run build && npx wrangler deploy",
     "itch": "npm run build && rm -f plonko-itch.zip && cd client/dist && zip -qr ../../plonko-itch.zip . && cd ../.. && echo \"Wrote plonko-itch.zip\"",
     "start": "npm run start -w @plonko/server",
     "lint": "npm run lint -w client",
