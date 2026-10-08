@@ -1,22 +1,24 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
+import { stageById } from '@plonko/shared'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { keyboardIntent } from '../input/keyboard'
 import { botIntent } from './bot'
 import { Fighter } from './Fighter'
+import { FloorItems } from './FloorItems'
+import { Ledges } from './Ledges'
+import { TILE } from './floor'
 import { Particles } from './Particles'
 import { Platform } from './Platform'
 import { RemoteFighter } from './RemoteFighter'
 import { Scenery } from './Scenery'
+import { StageHazards } from './StageHazards'
 import { useSettings } from './settings'
 import { fx, sideOf, useGame } from './store'
+import { inBackground } from './ticker'
 import { useTuning } from './tuning'
 
 const CAMERA_POS: [number, number, number] = [0, 15, 12]
-const SPAWNS: [number, number][] = [
-  [0, 3],
-  [0, -3],
-]
 const COLORS = ['#38bdf8', '#f87171']
 
 // Fixed overview camera behind the local player's side; only moves to shake on a hit.
@@ -43,41 +45,80 @@ function CameraRig() {
   return null
 }
 
+// Draws the scene, except while the page is hidden: the game keeps simulating there so the
+// player does not freeze for their opponent, but nobody can see it, so drawing is skipped.
+function Renderer() {
+  useFrame(({ gl, scene, camera }) => {
+    if (!inBackground()) gl.render(scene, camera)
+  }, 1)
+  return null
+}
+
 export function Game() {
   const t = useTuning()
+  const stage = stageById(useGame((s) => s.stage))
+  const { theme } = stage
+  // Kept stable between renders: fighters go back to their spawn whenever it changes.
+  const spawns = useMemo(() => stage.spawns.map(([x, z]) => [x * TILE, z * TILE] as [number, number]), [stage])
+
+  // The page background is the sky behind the transparent canvas, so it follows the stage too.
+  useEffect(() => {
+    theme.sky.forEach((color, i) => document.documentElement.style.setProperty(`--sky-${i}`, color))
+  }, [theme])
   const frozen = useGame((s) => s.frozen)
   const slot = useGame((s) => s.slot)
   const peers = useGame((s) => s.peers)
   const shadows = useSettings((s) => s.shadows)
   const avatar = useSettings((s) => s.avatar)
+  const myName = useSettings((s) => s.name) || 'You'
   // The bot never wears the same skeleton as the player.
   const botAvatar = avatar === 'minion' ? 'warrior' : 'minion'
   const mode = useGame((s) => s.mode)
+  // Name tags stay off the landing page, where the fighters are only a backdrop.
+  const tags = mode !== 'landing'
   // The menu pauses the game only against the bot; an online match cannot stop for one player.
   const paused = useGame((s) => s.menuOpen && s.mode === 'solo')
 
   return (
     <Canvas shadows camera={{ position: CAMERA_POS, fov: 42 }}>
       {/* Distant things fade into the dark, so tiles and fighters vanish as they fall into the pit. */}
-      <fog attach="fog" args={['#140b1f', 27, 50]} />
-      <ambientLight intensity={0.55} color="#b9a8ff" />
+      <fog attach="fog" args={[theme.fog, 27, 50]} />
+      <ambientLight intensity={0.55} color={theme.ambient} />
       <directionalLight position={[6, 14, 6]} intensity={1.5} color="#fff1dc" castShadow={shadows} shadow-mapSize={[1024, 1024]}>
         <orthographicCamera attach="shadow-camera" args={[-16, 16, 16, -16, 1, 40]} />
       </directionalLight>
       <CameraRig />
+      <Renderer />
       <Particles />
+      <StageHazards stage={stage} />
+      <FloorItems />
       <Suspense fallback={null}>
-        <Scenery />
+        <Scenery theme={theme} />
+        <Ledges theme={theme} />
       </Suspense>
       <Physics gravity={[0, -t.gravity, 0]} paused={frozen || paused}>
-        <Platform key={`${t.arenaRadius}-${t.minRadius}`} radius={t.arenaRadius} />
-        <Fighter id="me" avatar={avatar} color={COLORS[slot]} spawn={SPAWNS[slot]} getIntent={keyboardIntent} />
+        <Platform key={stage.id} stage={stage} />
+        <Fighter
+          id="me"
+          avatar={avatar}
+          color={COLORS[slot]}
+          spawn={spawns[slot]}
+          name={tags ? myName : undefined}
+          getIntent={keyboardIntent}
+        />
         {/* The bot is the solo opponent, and stands on the arena behind the landing page. */}
         {mode !== 'online' ? (
-          <Fighter id="bot" avatar={botAvatar} color={COLORS[1]} spawn={SPAWNS[1]} getIntent={botIntent} />
+          <Fighter
+            id="bot"
+            avatar={botAvatar}
+            color={COLORS[1]}
+            spawn={spawns[1]}
+            name={tags ? 'Bot' : undefined}
+            getIntent={botIntent}
+          />
         ) : (
           peers.map((p) => (
-            <RemoteFighter key={p.id} id={p.id} avatar={p.avatar} color={COLORS[p.slot]} spawn={SPAWNS[p.slot]} />
+            <RemoteFighter key={p.id} id={p.id} avatar={p.avatar} color={COLORS[p.slot]} spawn={spawns[p.slot]} name={p.name} />
           ))
         )}
       </Physics>

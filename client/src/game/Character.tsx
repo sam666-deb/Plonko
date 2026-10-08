@@ -8,7 +8,7 @@ import { AnimationMixer, LoopOnce, LoopRepeat, MeshBasicMaterial, MeshStandardMa
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { useGame } from './store'
 
-export type Anim = 'idle' | 'run' | 'attack' | 'hit' | 'fall' | 'cheer' | 'taunt' | 'defeat'
+export type Anim = 'idle' | 'run' | 'attack' | 'block' | 'hit' | 'fall' | 'cheer' | 'taunt' | 'wave' | 'defeat'
 
 const MODELS = import.meta.env.BASE_URL + 'models/'
 const modelUrl = (avatar: Avatar) => `${MODELS}skeleton-${avatar}.glb`

@@ -6,11 +6,6 @@ export const CAPSULE_RADIUS = 0.4
 export const REST_Y = CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS
 
 const defaults = {
-  arenaRadius: 7,
-  // The platform holds its size for shrinkDelay seconds, then shrinks to minRadius over shrinkTime.
-  minRadius: 2,
-  shrinkDelay: 8,
-  shrinkTime: 25,
   gravity: 28,
   killY: -6,
 
@@ -18,6 +13,8 @@ const defaults = {
   accel: 40,
   decel: 24,
   airControl: 0.35,
+
+  jumpSpeed: 9.5,
 
   dashSpeed: 12,
   dashDuration: 0.2,
@@ -33,6 +30,18 @@ const defaults = {
   knockUp: 4.5,
   hitStun: 0.38,
   stunDrag: 1.6,
+
+  // Blocking: the share of a hit's knockback that still gets through, and the share thrown back at the attacker.
+  blockKnock: 0.15,
+  blockRecoil: 0.6,
+  // Seconds a full guard can be held, seconds to refill it from empty, and the share each blocked hit costs.
+  guardTime: 1.2,
+  guardRecharge: 2.2,
+  guardCost: 0.35,
+
+  // Damage: each hit taken adds hitDamage per cent, and at 100 per cent knockback is (1 + damageScale) times as strong.
+  hitDamage: 18,
+  damageScale: 1,
 
   hitstopMs: 70,
   shake: 0.45,
@@ -54,11 +63,7 @@ export type Tuning = typeof defaults
 export const tuning: Tuning = { ...defaults }
 
 export function useTuning(): Tuning {
-  const arena = useControls('Arena', {
-    arenaRadius: { value: defaults.arenaRadius, min: 3, max: 14, step: 0.5 },
-    minRadius: { value: defaults.minRadius, min: 0.5, max: 6, step: 0.5 },
-    shrinkDelay: { value: defaults.shrinkDelay, min: 0, max: 30, step: 1 },
-    shrinkTime: { value: defaults.shrinkTime, min: 3, max: 60, step: 1 },
+  const world = useControls('World', {
     gravity: { value: defaults.gravity, min: 5, max: 60, step: 1 },
     killY: { value: defaults.killY, min: -20, max: -2, step: 1 },
   })
@@ -67,6 +72,7 @@ export function useTuning(): Tuning {
     accel: { value: defaults.accel, min: 5, max: 150, step: 5 },
     decel: { value: defaults.decel, min: 5, max: 150, step: 5 },
     airControl: { value: defaults.airControl, min: 0, max: 1, step: 0.05 },
+    jumpSpeed: { value: defaults.jumpSpeed, min: 4, max: 16, step: 0.5 },
   })
   const dash = useControls('Dash', {
     dashSpeed: { value: defaults.dashSpeed, min: 5, max: 40, step: 1 },
@@ -87,6 +93,15 @@ export function useTuning(): Tuning {
     hitstopMs: { value: defaults.hitstopMs, min: 0, max: 250, step: 10 },
     shake: { value: defaults.shake, min: 0, max: 2, step: 0.05 },
   })
+  const block = useControls('Block', {
+    hitDamage: { value: defaults.hitDamage, min: 0, max: 60, step: 1 },
+    damageScale: { value: defaults.damageScale, min: 0, max: 3, step: 0.1 },
+    blockKnock: { value: defaults.blockKnock, min: 0, max: 1, step: 0.05 },
+    blockRecoil: { value: defaults.blockRecoil, min: 0, max: 1.5, step: 0.05 },
+    guardTime: { value: defaults.guardTime, min: 0.3, max: 5, step: 0.1 },
+    guardRecharge: { value: defaults.guardRecharge, min: 0.3, max: 6, step: 0.1 },
+    guardCost: { value: defaults.guardCost, min: 0, max: 1, step: 0.05 },
+  })
   const bot = useControls('Bot', {
     botSpeed: { value: defaults.botSpeed, min: 0, max: 1, step: 0.05 },
     botDashRange: { value: defaults.botDashRange, min: 1, max: 8, step: 0.2 },
@@ -99,5 +114,5 @@ export function useTuning(): Tuning {
     simJitterMs: { value: defaults.simJitterMs, min: 0, max: 200, step: 5 },
     simLossPct: { value: defaults.simLossPct, min: 0, max: 50, step: 1 },
   })
-  return Object.assign(tuning, arena, move, dash, body, hit, bot, net)
+  return Object.assign(tuning, world, move, dash, body, hit, block, bot, net)
 }

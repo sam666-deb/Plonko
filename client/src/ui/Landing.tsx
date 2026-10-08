@@ -1,8 +1,25 @@
-import { AVATARS } from '@plonko/shared'
+import { AVATARS, MAX_NAME_LENGTH } from '@plonko/shared'
 import { useSettings } from '../game/settings'
 import { useGame } from '../game/store'
 import { startOnline } from '../net/net'
 import { BotIcon, FriendsIcon, SlidersIcon } from './icons'
+
+function NameField() {
+  const name = useSettings((s) => s.name)
+  const change = useSettings((s) => s.change)
+  return (
+    <input
+      className="name-field"
+      value={name}
+      maxLength={MAX_NAME_LENGTH}
+      placeholder="Your name"
+      aria-label="Your name"
+      autoComplete="off"
+      spellCheck={false}
+      onChange={(e) => change({ name: e.target.value })}
+    />
+  )
+}
 
 function AvatarPicker() {
   const avatar = useSettings((s) => s.avatar)
@@ -35,7 +52,9 @@ export function Landing() {
   return (
     <div className="landing">
       <div className="brand">
-        <h1>Plonko</h1>
+        <h1>
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Plonko" />
+        </h1>
         <p>
           {invited
             ? 'You have been invited to a match. Pick your skeleton and join.'
@@ -43,6 +62,7 @@ export function Landing() {
         </p>
       </div>
 
+      <NameField />
       <AvatarPicker />
 
       {invited ? (
@@ -85,6 +105,10 @@ export function Landing() {
           <span>move</span>
           <kbd>Space</kbd>
           <span>dash</span>
+          <kbd>Shift</kbd>
+          <span>block</span>
+          <kbd>E</kbd>
+          <span>jump</span>
         </div>
       </div>
     </div>

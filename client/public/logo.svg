@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 200" role="img" aria-label="Plonko">
+  <defs>
+    <!-- Blue to violet to coral: the two player colours meeting in the middle. -->
+    <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="20" y1="0" x2="640" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.5" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#f87171"/>
+    </linearGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- The letters, drawn as single rounded strokes. The last O has been knocked off the line. -->
+    <g id="letters" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M34 30V130M34 30H58a29 29 0 0 1 0 58H34"/>
+      <path d="M130 30V130H172"/>
+      <ellipse cx="246" cy="80" rx="43" ry="50"/>
+      <path d="M332 130V30L394 130V30"/>
+      <path d="M438 30V130M496 30L438 88M462 68L500 130"/>
+      <ellipse cx="582" cy="104" rx="43" ry="50" transform="rotate(24 582 104)"/>
+    </g>
+  </defs>
+
+  <use href="#letters" stroke="#1a0f2b" stroke-width="44"/>
+  <use href="#letters" stroke="#1a0f2b" stroke-width="44" transform="translate(0 10)"/>
+  <!-- The skull O is filled in, so its eyes glow against the dark on any background. -->
+  <ellipse cx="246" cy="80" rx="43" ry="50" fill="#1a0f2b"/>
+  <use href="#letters" stroke="url(#ink)" stroke-width="26"/>
+  <!-- A thin highlight along the top of each stroke. -->
+  <use href="#letters" stroke="#fff" stroke-opacity="0.3" stroke-width="4" transform="translate(-3 -5)"/>
+
+  <!-- The first O is a skull: two glowing eyes. -->
+  <g fill="#ffc15a" filter="url(#glow)">
+    <ellipse cx="231" cy="78" rx="9" ry="12"/>
+    <ellipse cx="261" cy="78" rx="9" ry="12"/>
+  </g>
+
+  <!-- Impact spark where the K struck, and speed lines behind the falling O. -->
+  <path transform="translate(10 -6)" d="M528 14l5 15 15 3-13 8 1 16-11-11-15 5 8-14-9-13 16 3z" fill="#ffd166" stroke="#1a0f2b" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="none" stroke="#ffd166" stroke-width="7" stroke-linecap="round">
+    <path d="M584 24l9 13M614 30l5 13M638 50l2 12"/>
+  </g>
+</svg>

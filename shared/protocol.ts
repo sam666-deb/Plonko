@@ -16,18 +16,29 @@ export type Avatar = (typeof AVATARS)[number]
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
 
-// p: position, v: velocity on the ground plane, h: facing direction, d: currently dashing.
-export type PlayerState = { p: Vec3; v: Vec2; h: Vec2; d: boolean }
+// p: position, v: velocity on the ground plane, h: facing direction, d: currently dashing, b: currently blocking,
+// dmg: damage taken this round, e: active power-ups as a bit mask (see POWER_BITS).
+// em: the emote being played, as an index into EMOTES plus one; 0 for none.
+export type PlayerState = { p: Vec3; v: Vec2; h: Vec2; d: boolean; b: boolean; dmg: number; e: number; em: number }
 
-export type Peer = { id: string; slot: number; avatar: Avatar }
+// The emotes, in key order: 1, 2 and 3.
+export const EMOTES = ['taunt', 'cheer', 'wave'] as const
+export const MAX_NAME_LENGTH = 14
+
+export const POWER_BITS = { heavy: 1, quick: 2 }
+
+export type Peer = { id: string; slot: number; avatar: Avatar; name: string }
 export type Scores = Record<string, number>
 
 export type ClientMsg =
-  | { type: 'join'; room: string; avatar: Avatar }
+  | { type: 'join'; room: string; avatar: Avatar; name: string }
   | ({ type: 'state' } & PlayerState)
   // impulse: the velocity change the target should apply to itself.
-  | { type: 'hit'; target: string; impulse: Vec3 }
+  // recoil: this is the kick-back sent to an attacker whose hit was blocked, not a hit of its own.
+  | { type: 'hit'; target: string; impulse: Vec3; recoil: boolean }
   | { type: 'eliminated' }
+  // Asks for power-up number `item` of this round. The server grants each one to the first to ask.
+  | { type: 'pickup'; item: number }
   | { type: 'rematch' }
   | { type: 'ping'; t: number }
 
@@ -37,8 +48,10 @@ export type ServerMsg =
   | ({ type: 'joined' } & Peer)
   | { type: 'left'; id: string }
   | ({ type: 'state'; id: string } & PlayerState)
-  | { type: 'hit'; from: string; impulse: Vec3 }
+  | { type: 'hit'; from: string; impulse: Vec3; recoil: boolean }
   | { type: 'roundEnd'; loser: string; scores: Scores }
-  | { type: 'roundStart'; round: number; scores: Scores }
+  // level: which round of the match this is, counting from 1. stage: the arena to play it on.
+  | { type: 'roundStart'; round: number; scores: Scores; level: number; stage: string }
   | { type: 'matchEnd'; winner: string; scores: Scores }
+  | { type: 'pickup'; id: string; item: number }
   | { type: 'pong'; t: number }

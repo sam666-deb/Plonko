@@ -1,21 +1,26 @@
 import { randomBytes } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import type { WebSocket } from 'ws'
-import { AVATARS, DEFAULT_PORT, MAX_PLAYERS, ROUND_RESET_MS, WINS_TO_MATCH } from '@plonko/shared'
+import { AVATARS, DEFAULT_PORT, DEFAULT_STAGE, MAX_NAME_LENGTH, MAX_PLAYERS, ROUND_RESET_MS, WINS_TO_MATCH, pickStage } from '@plonko/shared'
 import type { Avatar, ClientMsg, Scores, ServerMsg } from '@plonko/shared'
 
 // Relay only: clients simulate their own physics. The server owns who is in a room,
 // the score, and when a round or match ends and restarts.
 
-type Player = { id: string; slot: number; avatar: Avatar; ws: WebSocket }
+type Player = { id: string; slot: number; avatar: Avatar; name: string; ws: WebSocket }
 type Room = {
   players: Map<string, Player>
   scores: Scores
   round: number
+  // The round of the current match, counting from 1, and the stage it is played on.
+  level: number
+  stage: string
   // A round has been decided and the next one has not started yet.
   resolving: boolean
   // Someone has won the match; waiting for a rematch request.
   ended: boolean
+  // Power-ups already picked up this round.
+  claimed: Set<number>
 }
 
 const HEARTBEAT_MS = 15000
@@ -41,16 +46,21 @@ function startRound(room: Room, newMatch: boolean) {
   if (newMatch) {
     for (const id of room.players.keys()) room.scores[id] = 0
     room.ended = false
+    room.level = 0
   }
   room.resolving = false
+  room.claimed.clear()
   room.round++
-  broadcast(room, { type: 'roundStart', round: room.round, scores: room.scores })
+  room.level++
+  // Each level is a tier harder, on a stage drawn from that tier. A lone player waits on the default stage.
+  room.stage = room.players.size < 2 ? DEFAULT_STAGE : pickStage(room.level, room.stage)
+  broadcast(room, { type: 'roundStart', round: room.round, scores: room.scores, level: room.level, stage: room.stage })
 }
 
-function join(ws: WebSocket, code: string, avatar: Avatar): { room: Room; player: Player } | null {
+function join(ws: WebSocket, code: string, avatar: Avatar, name: string): { room: Room; player: Player } | null {
   let room = rooms.get(code)
   if (!room) {
-    room = { players: new Map(), scores: {}, round: 0, resolving: false, ended: false }
+    room = { players: new Map(), scores: {}, round: 0, level: 0, stage: DEFAULT_STAGE, resolving: false, ended: false, claimed: new Set() }
     rooms.set(code, room)
   }
   if (room.players.size >= MAX_PLAYERS) {
@@ -63,12 +73,12 @@ function join(ws: WebSocket, code: string, avatar: Avatar): { room: Room; player
   let slot = 0
   while (taken.has(slot)) slot++
 
-  const player: Player = { id: randomBytes(4).toString('hex'), slot, avatar, ws }
-  const peers = [...room.players.values()].map((p) => ({ id: p.id, slot: p.slot, avatar: p.avatar }))
+  const player: Player = { id: randomBytes(4).toString('hex'), slot, avatar, name, ws }
+  const peers = [...room.players.values()].map((p) => ({ id: p.id, slot: p.slot, avatar: p.avatar, name: p.name }))
   room.players.set(player.id, player)
 
   send(ws, { type: 'welcome', id: player.id, slot, peers })
-  broadcast(room, { type: 'joined', id: player.id, slot, avatar }, player.id)
+  broadcast(room, { type: 'joined', id: player.id, slot, avatar, name }, player.id)
   startRound(room, true)
   return { room, player }
 }
@@ -95,7 +105,9 @@ wss.on('connection', (ws) => {
     if (msg.type === 'join') {
       if (session || typeof msg.room !== 'string' || !msg.room) return
       code = msg.room.slice(0, 32)
-      session = join(ws, code, AVATARS.includes(msg.avatar) ? msg.avatar : 'minion')
+      // Names are shown to the other player, so they are trimmed to a short run of ordinary characters.
+      const name = (typeof msg.name === 'string' ? msg.name : '').replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, MAX_NAME_LENGTH)
+      session = join(ws, code, AVATARS.includes(msg.avatar) ? msg.avatar : 'minion', name || 'Player')
       return
     }
     if (!session) return
@@ -104,13 +116,13 @@ wss.on('connection', (ws) => {
     switch (msg.type) {
       case 'state':
         if (!isVec(msg.p, 3) || !isVec(msg.v, 2) || !isVec(msg.h, 2)) break
-        broadcast(room, { type: 'state', id: player.id, p: msg.p, v: msg.v, h: msg.h, d: Boolean(msg.d) }, player.id)
+        broadcast(room, { type: 'state', id: player.id, p: msg.p, v: msg.v, h: msg.h, d: Boolean(msg.d), b: Boolean(msg.b), dmg: Math.min(999, Math.max(0, Number(msg.dmg) || 0)), e: Number(msg.e) & 3, em: Math.min(3, Math.max(0, Number(msg.em) | 0)) }, player.id)
         break
       case 'hit': {
         const target = room.players.get(msg.target)
         if (!target || target === player || !isVec(msg.impulse, 3) || room.resolving || room.ended) break
         const [x, y, z] = msg.impulse.map((n) => Math.max(-MAX_IMPULSE, Math.min(MAX_IMPULSE, n)))
-        send(target.ws, { type: 'hit', from: player.id, impulse: [x, y, z] })
+        send(target.ws, { type: 'hit', from: player.id, impulse: [x, y, z], recoil: Boolean(msg.recoil) })
         break
       }
       case 'eliminated': {
@@ -134,6 +146,11 @@ wss.on('connection', (ws) => {
         }, ROUND_RESET_MS)
         break
       }
+      case 'pickup':
+        if (!Number.isInteger(msg.item) || msg.item < 0 || room.claimed.has(msg.item) || room.resolving || room.ended) break
+        room.claimed.add(msg.item)
+        broadcast(room, { type: 'pickup', id: player.id, item: msg.item })
+        break
       case 'rematch':
         if (room.ended) startRound(room, true)
         break

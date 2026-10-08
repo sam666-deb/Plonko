@@ -1,7 +1,9 @@
 import { create } from 'zustand'
-import { COUNTDOWN_MS, ROUND_RESET_MS, WINS_TO_MATCH } from '@plonko/shared'
+import { COUNTDOWN_MS, DEFAULT_STAGE, ROUND_RESET_MS, WINS_TO_MATCH, pickStage, stageById } from '@plonko/shared'
 import type { Peer } from '@plonko/shared'
 import { sfx } from '../audio/sfx'
+import { resetStats } from './stats'
+import { after } from './ticker'
 
 // The local player is always 'me' and the offline opponent 'bot'; remote players use their server id.
 export type FighterId = string
@@ -11,6 +13,12 @@ type GameState = {
   mode: 'landing' | 'solo' | 'online'
   scores: { me: number; them: number }
   round: number
+  // The round of the current match, counting from 1, and the id of the stage it is played on.
+  level: number
+  stage: string
+  // Identifies the round. Both players hold the same value online, so anything random that is
+  // derived from it (where power-ups appear) comes out the same for both.
+  seed: number
   // performance.now() at which the current round's countdown ends and fighters may move.
   playAt: number
   frozen: boolean
@@ -36,10 +44,16 @@ type GameState = {
 
 let menuOpenedAt = 0
 
+// Solo matches choose their own stages, the way the server does online.
+const nextLevel = (level: number, previous?: string) => ({ level, stage: pickStage(level, previous) })
+
 export const useGame = create<GameState>((set, get) => ({
   mode: 'landing',
   scores: { me: 0, them: 0 },
   round: 0,
+  level: 1,
+  stage: DEFAULT_STAGE,
+  seed: 0,
   playAt: performance.now() + COUNTDOWN_MS,
   frozen: false,
   flashes: 0,
@@ -62,7 +76,7 @@ export const useGame = create<GameState>((set, get) => ({
 
   // Every round start goes through here: fighters respawn and the countdown restarts.
   beginRound: (changes) => {
-    set((s) => ({ ...changes, round: s.round + 1, banner: null, playAt: performance.now() + COUNTDOWN_MS }))
+    set((s) => ({ seed: s.round + 1, ...changes, round: s.round + 1, banner: null, playAt: performance.now() + COUNTDOWN_MS }))
     const round = get().round
     sfx.ready()
     setTimeout(() => get().round === round && sfx.go(), COUNTDOWN_MS)
@@ -84,18 +98,25 @@ export const useGame = create<GameState>((set, get) => ({
     if (meWon) sfx.roundWon()
     else sfx.roundLost()
     setTimeout(() => {
-      if (get().mode === 'solo') get().beginRound()
+      const now = get()
+      if (now.mode === 'solo') now.beginRound(nextLevel(now.level + 1, now.stage))
     }, ROUND_RESET_MS)
   },
 
-  localRematch: () => get().beginRound({ scores: { me: 0, them: 0 }, match: null }),
+  localRematch: () => {
+    resetStats()
+    get().beginRound({ scores: { me: 0, them: 0 }, match: null, ...nextLevel(1, get().stage) })
+  },
 
-  startSolo: () => get().beginRound({ mode: 'solo', scores: { me: 0, them: 0 }, match: null }),
+  startSolo: () => {
+    resetStats()
+    get().beginRound({ mode: 'solo', scores: { me: 0, them: 0 }, match: null, ...nextLevel(1) })
+  },
 
   hitstop: (ms) => {
     if (ms <= 0 || get().frozen) return
     set({ frozen: true })
-    setTimeout(() => set({ frozen: false }), ms)
+    after(ms, () => set({ frozen: false }))
   },
 }))
 
@@ -110,5 +131,5 @@ export const sideOf = (slot: number) => (slot % 2 === 0 ? 1 : -1)
 
 // Per-frame state, kept out of React so it can be written from the physics step.
 export const fx = { shake: 0 }
-// The platform's current radius, which shrinks as a round goes on.
-export const arena = { radius: 0 }
+
+export const currentStage = () => stageById(useGame.getState().stage)

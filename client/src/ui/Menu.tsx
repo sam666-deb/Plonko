@@ -85,6 +85,12 @@ export function Menu() {
             <Row label="Volume">
               <Slider value={s.volume} onChange={(volume) => s.change({ volume })} />
             </Row>
+            <Row label="Music">
+              <Switch value={s.music} onChange={(music) => s.change({ music })} />
+            </Row>
+            <Row label="Music volume">
+              <Slider value={s.musicVolume} onChange={(musicVolume) => s.change({ musicVolume })} />
+            </Row>
           </div>
         </section>
 
@@ -121,6 +127,22 @@ export function Menu() {
             <div className="row">
               <span>Dash</span>
               <kbd>Space</kbd>
+            </div>
+            <div className="row">
+              <span>Jump</span>
+              <kbd>E</kbd>
+            </div>
+            <div className="row">
+              <span>Emotes</span>
+              <span className="keys">
+                <kbd>1</kbd>
+                <kbd>2</kbd>
+                <kbd>3</kbd>
+              </span>
+            </div>
+            <div className="row">
+              <span>Block (hold)</span>
+              <kbd>Shift</kbd>
             </div>
             <div className="row">
               <span>Menu</span>

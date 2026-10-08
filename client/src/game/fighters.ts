@@ -2,10 +2,15 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import type { Group } from 'three'
 import type { FighterId } from './store'
 
-export type Intent = { x: number; z: number; dash: boolean }
+// emote: 0 for none, otherwise an index into EMOTES plus one.
+export type Intent = { x: number; z: number; dash: boolean; block: boolean; jump: boolean; emote: number }
+
+export type PowerKind = 'heavy' | 'quick' | 'shock'
 
 export type FighterHandle = {
-  body: RapierRigidBody
+  // Always the fighter's current physics body. The engine can replace the body while the fighter
+  // lives on, so this is looked up on every use and never stored. null while it is being replaced.
+  readonly body: RapierRigidBody | null
   // Remote players are proxies: hitting one sends the hit to its owner instead of moving it here.
   remote: boolean
   // Multiplier on the knockback this fighter deals.
@@ -13,8 +18,21 @@ export type FighterHandle = {
   heading: () => [number, number]
   velocity: () => [number, number]
   isDashing: () => boolean
-  // A dash landed on this fighter: add the velocity change, pop it upward and stun it.
-  takeHit: (dvx: number, dvz: number, up: number) => void
+  isBlocking: () => boolean
+  // The emote being played: 0 for none, otherwise an index into EMOTES plus one.
+  emote: () => number
+  // Damage taken this round, in per cent. The higher it is, the further a hit sends the fighter.
+  damage: () => number
+  // Seconds left on each timed power-up; 0 when it is not active.
+  powers: () => { heavy: number; quick: number }
+  // Gives the fighter a power-up it picked up. Does nothing on a proxy.
+  grant: (kind: PowerKind) => void
+  // A dash landed on this fighter: add the velocity change, pop it upward and stun it. Returns true
+  // if the fighter blocked it instead. A proxy always returns false: its owner decides, and sends
+  // the recoil back if it blocked.
+  takeHit: (dvx: number, dvz: number, up: number) => boolean
+  // Thrown back and briefly stunned after hitting a block.
+  recoil: (dvx: number, dvz: number) => void
   // The other half of a body-to-body bump. Does nothing on a proxy, whose owner works out its own half.
   push: (dvx: number, dvz: number) => void
 }

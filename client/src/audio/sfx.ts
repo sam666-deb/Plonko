@@ -27,6 +27,9 @@ function unlock() {
   }
   if (ctx.state === 'suspended') void ctx.resume()
 }
+// The shared audio context, for the music. null until the player has interacted with the page.
+export const audioContext = () => ctx
+
 window.addEventListener('keydown', unlock)
 window.addEventListener('pointerdown', unlock)
 
@@ -77,6 +80,27 @@ export const sfx = {
     // The ring of a weapon connecting.
     tone('triangle', 1900, 1400, 0.18, 0.18 * strength)
     tone('square', 2850, 2600, 0.09, 0.05 * strength)
+  },
+  // A hit caught on a guard: a bright clang with no thump under it.
+  block: () => {
+    tone('triangle', 2500, 1700, 0.28, 0.3)
+    tone('square', 3700, 3100, 0.08, 0.06)
+    noise('highpass', 3000, 6000, 0.07, 0.25)
+  },
+  emote: () => notes('square', [660, 880], 0.07, 0.08),
+  jump: () => tone('sine', 300, 620, 0.14, 0.18),
+  bumper: () => {
+    tone('sine', 220, 660, 0.16, 0.4)
+    tone('triangle', 440, 1320, 0.12, 0.15)
+  },
+  spikes: () => {
+    noise('highpass', 2500, 7000, 0.12, 0.35)
+    tone('square', 900, 300, 0.12, 0.12)
+  },
+  pickup: () => notes('triangle', [784, 1047, 1568], 0.06, 0.22),
+  shockwave: () => {
+    tone('sine', 90, 35, 0.5, 0.9)
+    noise('lowpass', 1200, 150, 0.4, 0.5)
   },
   bump: (strength: number) => tone('sine', 120, 60, 0.1, 0.35 * strength),
   // A floor tile breaking away. Quiet, because several can go in a second.

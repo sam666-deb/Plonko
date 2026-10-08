@@ -1,9 +1,13 @@
-import { DEFAULT_PORT, STATE_HZ } from '@plonko/shared'
+import { DEFAULT_PORT, POWER_BITS, STATE_HZ } from '@plonko/shared'
 import type { ClientMsg, PlayerState, Scores, ServerMsg } from '@plonko/shared'
 import { sfx } from '../audio/sfx'
 import { burst } from '../game/effects'
 import { fighters } from '../game/fighters'
+import { askOnce, kindOf, markTaken } from '../game/powerups'
+import type { Item } from '../game/powerups'
+import { recordBlockedAfterAll, recordHit, recordItem, resetStats } from '../game/stats'
 import { useSettings } from '../game/settings'
+import { every } from '../game/ticker'
 import { fx, useGame } from '../game/store'
 import { tuning } from '../game/tuning'
 
@@ -65,7 +69,7 @@ function onMessage(msg: ServerMsg) {
       useGame.setState({ selfId: msg.id, slot: msg.slot, peers: msg.peers })
       break
     case 'joined':
-      useGame.setState({ peers: [...g.peers, { id: msg.id, slot: msg.slot, avatar: msg.avatar }], rivalLeft: false })
+      useGame.setState({ peers: [...g.peers, { id: msg.id, slot: msg.slot, avatar: msg.avatar, name: msg.name }], rivalLeft: false })
       break
     case 'left':
       snapshots.delete(msg.id)
@@ -75,16 +79,30 @@ function onMessage(msg: ServerMsg) {
       received++
       const now = performance.now()
       const buf = snapshots.get(msg.id) ?? []
-      buf.push({ t: now, p: msg.p, v: msg.v, h: msg.h, d: msg.d })
+      buf.push({ t: now, p: msg.p, v: msg.v, h: msg.h, d: msg.d, b: msg.b, dmg: msg.dmg, e: msg.e, em: msg.em })
       while (buf.length > 2 && buf[0].t < now - BUFFER_MS) buf.shift()
       snapshots.set(msg.id, buf)
       break
     }
     case 'hit': {
       const me = fighters.get('me')
-      if (!me) break
+      if (!me?.body) break
       const at = me.body.translation()
-      me.takeHit(msg.impulse[0], msg.impulse[2], msg.impulse[1])
+      const [ix, , iz] = msg.impulse
+      if (msg.recoil) {
+        // Our hit was blocked: the other client sends the kick-back.
+        recordBlockedAfterAll()
+        me.recoil(ix, iz)
+        sfx.block()
+        burst({ x: at.x, y: at.y + 0.2, z: at.z, count: 10, color: '#dff4ff', speed: 5, up: 1.5, life: 0.3 })
+        break
+      }
+      const blocked = me.takeHit(ix, iz, msg.impulse[1])
+      recordHit('them', 'me', blocked)
+      if (blocked) {
+        send({ type: 'hit', target: msg.from, impulse: [-ix * tuning.blockRecoil, 0, -iz * tuning.blockRecoil], recoil: true })
+        break
+      }
       burst({ x: at.x, y: at.y + 0.2, z: at.z, count: 14, color: '#fde68a', speed: 4, up: 2 })
       fx.shake = tuning.shake
       sfx.hit(Math.min(1.5, Math.hypot(msg.impulse[0], msg.impulse[2]) / 10))
@@ -101,12 +119,22 @@ function onMessage(msg: ServerMsg) {
       break
     case 'roundStart':
       snapshots.clear()
-      g.beginRound({ scores: applyScores(msg.scores), match: null })
+      if (msg.level === 1) resetStats()
+      g.beginRound({ scores: applyScores(msg.scores), match: null, level: msg.level, stage: msg.stage, seed: msg.round })
       break
     case 'matchEnd':
       if (msg.winner === g.selfId) sfx.matchWon()
       else sfx.matchLost()
       useGame.setState({ scores: applyScores(msg.scores), banner: null, match: msg.winner === g.selfId ? 'won' : 'lost' })
+      break
+    case 'pickup':
+      // The server has settled who got this item.
+      markTaken(msg.item)
+      if (msg.id === g.selfId) fighters.get('me')?.grant(kindOf(msg.item))
+      else {
+        recordItem('them')
+        sfx.pickup()
+      }
       break
     case 'pong':
       netStats.ping = Math.round(performance.now() - msg.t)
@@ -122,7 +150,7 @@ function open() {
   ws = socket
   socket.onopen = () => {
     netStats.connected = true
-    socket.send(JSON.stringify({ type: 'join', room, avatar: useSettings.getState().avatar } satisfies ClientMsg))
+    socket.send(JSON.stringify({ type: 'join', room, avatar: useSettings.getState().avatar, name: useSettings.getState().name } satisfies ClientMsg))
   }
   socket.onmessage = (e) => onMessage(JSON.parse(e.data))
   socket.onclose = () => {
@@ -142,6 +170,17 @@ export function reportFall(id: string) {
   else g.beginRound()
 }
 
+// A fighter simulated here is touching a power-up. Solo it is theirs at once; online the server
+// decides, in case both players reach it together, and only our own fighter may ask.
+export function claimItem(id: string, item: Item) {
+  if (useGame.getState().mode === 'solo') {
+    markTaken(item.n)
+    fighters.get(id)?.grant(item.kind)
+  } else if (id === 'me' && askOnce(item.n)) {
+    send({ type: 'pickup', item: item.n })
+  }
+}
+
 export function requestRematch() {
   const g = useGame.getState()
   if (g.mode === 'solo') g.localRematch()
@@ -149,7 +188,7 @@ export function requestRematch() {
 }
 
 export function sendHit(target: string, dvx: number, dvz: number, up: number) {
-  send({ type: 'hit', target, impulse: [dvx, up, dvz] })
+  send({ type: 'hit', target, impulse: [dvx, up, dvz], recoil: false })
 }
 
 // Enters online play: joins the room named in the URL, or makes a new one and puts its code
@@ -166,19 +205,31 @@ export function startOnline() {
   useGame.getState().beginRound({ mode: 'online', scores: { me: 0, them: 0 }, match: null })
   open()
 
-  setInterval(() => {
+  every(1000 / STATE_HZ, () => {
     const me = fighters.get('me')
-    if (!me || useGame.getState().peers.length === 0) return
+    if (!me?.body || useGame.getState().peers.length === 0) return
     const p = me.body.translation()
-    send({ type: 'state', p: [p.x, p.y, p.z], v: me.velocity(), h: me.heading(), d: me.isDashing() })
-  }, 1000 / STATE_HZ)
+    const powers = me.powers()
+    const e = (powers.heavy > 0 ? POWER_BITS.heavy : 0) | (powers.quick > 0 ? POWER_BITS.quick : 0)
+    send({
+      type: 'state',
+      p: [p.x, p.y, p.z],
+      v: me.velocity(),
+      h: me.heading(),
+      d: me.isDashing(),
+      b: me.isBlocking(),
+      dmg: Math.round(me.damage()),
+      e,
+      em: me.emote(),
+    })
+  })
 
-  setInterval(() => {
+  every(1000, () => {
     netStats.recvHz = received
     received = 0
     // Pings skip the simulator so the readout shows the real connection.
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping', t: performance.now() } satisfies ClientMsg))
-  }, 1000)
+  })
 }
 
 // Where a remote player was `interpDelayMs` ago, blended between the two states around that time.
@@ -198,6 +249,10 @@ export function sampleRemote(id: string): PlayerState | null {
       v: a.v,
       h: b.h,
       d: a.d,
+      b: a.b,
+      dmg: b.dmg,
+      e: b.e,
+      em: b.em,
     }
   }
   return buf[0]

@@ -5,6 +5,9 @@ import type { Avatar } from '@plonko/shared'
 // Player preferences, remembered in the browser between visits.
 export type Settings = {
   avatar: Avatar
+  name: string
+  music: boolean
+  musicVolume: number
   muted: boolean
   volume: number
   // Multiplier on camera shake; 0 turns it off.
@@ -20,6 +23,9 @@ export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
       avatar: 'warrior',
+      name: '',
+      music: true,
+      musicVolume: 0.5,
       muted: false,
       volume: 0.7,
       shake: 1,

@@ -24,7 +24,7 @@ body,
 
 /* The 3D canvas is transparent, so this is the sky behind the arena. */
 body {
-  background: radial-gradient(1100px 700px at 50% 30%, #3a2352 0%, #1c1029 50%, #0a0610 100%);
+  background: radial-gradient(1100px 700px at 50% 30%, var(--sky-0, #3a2352) 0%, var(--sky-1, #1c1029) 50%, var(--sky-2, #0a0610) 100%);
 }
 
 /* ---------- shared pieces ---------- */
@@ -32,6 +32,8 @@ body {
 .hud {
   position: fixed;
   inset: 0;
+  /* Above the name tags, which the 3D scene places in the page with small z-indexes. */
+  z-index: 20;
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -183,9 +185,44 @@ kbd {
   place-items: center;
 }
 
-.countdown span {
+.countdown > span {
   grid-area: 1 / 1;
   opacity: 0;
+}
+
+/* The stage card shown during the countdown: level and tier above the stage's name. */
+.countdown .ready {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.tier {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.countdown .tier {
+  font-size: 20px;
+  text-shadow: 0 2px 10px rgb(0 0 0 / 0.6);
+}
+
+.tier.normal {
+  color: #4ade80;
+}
+
+.tier.medium {
+  color: #facc15;
+}
+
+.tier.hard {
+  color: #fb923c;
+}
+
+.tier.extreme {
+  color: #fb7185;
 }
 
 .countdown .ready {
@@ -196,7 +233,7 @@ kbd {
   animation: show 500ms steps(1, end) var(--countdown);
 }
 
-.countdown.paused span {
+.countdown.paused > span {
   animation-play-state: paused;
 }
 
@@ -308,19 +345,16 @@ kbd {
 
 .brand h1 {
   margin: 0;
-  font-size: clamp(64px, 14vw, 132px);
-  font-weight: 700;
-  line-height: 0.95;
-  letter-spacing: -0.03em;
-  background: linear-gradient(100deg, var(--blue) 0%, #a78bfa 50%, var(--red) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 10px 30px rgb(109 94 252 / 0.45));
+  line-height: 0;
+}
+
+.brand h1 img {
+  width: clamp(280px, 62vw, 640px);
+  filter: drop-shadow(0 12px 32px rgb(109 94 252 / 0.45));
 }
 
 .brand p {
-  margin: 14px 0 0;
+  margin: 6px 0 0;
   font-size: clamp(16px, 2.4vw, 20px);
   color: var(--muted);
 }
@@ -617,4 +651,164 @@ kbd {
   .hud button {
     transition: none;
   }
+}
+
+/* Damage and power-up readout under the score. */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status span {
+  padding: 3px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.damage.mid {
+  color: #facc15;
+}
+
+.damage.high {
+  color: #fb7185;
+}
+
+.power.heavy {
+  color: #c084fc;
+}
+
+.power.quick {
+  color: #facc15;
+}
+
+.landing-foot .keys {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Name above each fighter's head, placed by the 3D scene. */
+.nametag {
+  padding: 1px 8px;
+  font-family: 'Fredoka', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgb(10 6 16 / 0.6);
+  border-radius: 999px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.name-field {
+  width: min(260px, 100%);
+  box-sizing: border-box;
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(12px);
+}
+
+.name-field::placeholder {
+  color: var(--muted);
+}
+
+/* Small map of the stage on the countdown card. */
+.preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.preview .map {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 12px);
+  gap: 2px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.preview .map i {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.preview .tile {
+  background: rgb(255 255 255 / 0.4);
+}
+
+.preview .core {
+  background: #fff;
+}
+
+.preview .spike {
+  background: #fb7185;
+}
+
+.preview .bumper {
+  background: #38bdf8;
+}
+
+.preview .hazards {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fb923c;
+  text-shadow: 0 2px 8px rgb(0 0 0 / 0.6);
+}
+
+/* End-of-match table. */
+.summary {
+  padding: 14px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  font-size: 15px;
+}
+
+.summary table {
+  border-collapse: collapse;
+}
+
+.summary th,
+.summary td {
+  padding: 5px 14px;
+  text-align: center;
+}
+
+.summary th {
+  font-weight: 600;
+}
+
+.summary td:first-child {
+  text-align: left;
+  color: var(--muted);
+}
+
+.summary .best {
+  font-weight: 700;
+  color: #4ade80;
+}
+
+.summary .length {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
 }
