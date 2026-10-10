@@ -142,6 +142,30 @@ const VOID: Theme = {
   wall: 'none',
 }
 
+const ROYAL: Theme = {
+  sky: ['#4a2a6b', '#221236', '#0b0612'],
+  fog: '#160c24',
+  pit: ['#ffe08a', '#c0841f'],
+  torch: '#ffd27a',
+  ambient: '#e6d2ff',
+  block: '#4b3f5e',
+  tint: '#fff4d6',
+  props: ['chest_gold', 'candle_triple', 'chest'],
+  wall: 'banner',
+}
+
+const SUNSET: Theme = {
+  sky: ['#7a3b2e', '#3a1a22', '#120810'],
+  fog: '#1f0f14',
+  pit: ['#ffd0a0', '#ff6a4a'],
+  torch: '#ffb48a',
+  ambient: '#ffd6c2',
+  block: '#4a3328',
+  tint: '#fff0e0',
+  props: ['barrel_large', 'trunk_large_A', 'column'],
+  wall: 'bare',
+}
+
 const DISC = [
   '...ooo...',
   '..ooooo..',
@@ -154,113 +178,153 @@ const DISC = [
   '...ooo...',
 ]
 
+// The same disc with the centre nine tiles left standing.
+const DISC_WITH_CORE = DISC.map((row, r) => (r >= 3 && r <= 5 ? 'ooo###ooo' : row))
+
+const SMALL_DISC = ['..ooo..', '.ooooo.', 'ooooooo', 'ooooooo', 'ooooooo', '.ooooo.', '..ooo..']
+
+// How a tier paces its collapse. A stage can override any of these.
+const PACE: Record<Tier, Pick<Stage, 'collapseDelay' | 'collapseTime' | 'warn' | 'chaos'>> = {
+  normal: { collapseDelay: 8, collapseTime: 24, warn: 1, chaos: 0.15 },
+  medium: { collapseDelay: 6, collapseTime: 20, warn: 0.9, chaos: 0.25 },
+  hard: { collapseDelay: 5, collapseTime: 18, warn: 0.8, chaos: 0.3 },
+  extreme: { collapseDelay: 3, collapseTime: 15, warn: 0.7, chaos: 0.5 },
+}
+
+type StageSpec = Pick<Stage, 'id' | 'name' | 'tier' | 'tiles' | 'theme' | 'map'> & Partial<Stage>
+
+// Fills in what most stages share: players start two tiles either side of the centre, footing
+// is normal, there are no hazards, and the collapse follows the tier's pace.
+const stage = (spec: StageSpec): Stage => ({
+  spawns: [
+    [0, 2],
+    [0, -2],
+  ],
+  grip: 1,
+  hazards: [],
+  ...PACE[spec.tier],
+  ...spec,
+})
+
+// In order of difficulty: this order is also the solo campaign.
 export const STAGES: Stage[] = [
-  {
-    id: 'hall',
-    name: 'The Great Hall',
-    tier: 'normal',
-    tiles: 'stone',
-    theme: CRYPT,
-    map: [
-      '...ooo...',
-      '..ooooo..',
-      '.ooooooo.',
-      'ooo###ooo',
-      'ooo###ooo',
-      'ooo###ooo',
-      '.ooooooo.',
-      '..ooooo..',
-      '...ooo...',
-    ],
-    spawns: [
-      [0, 2],
-      [0, -2],
-    ],
-    collapseDelay: 8,
-    collapseTime: 25,
-    warn: 1,
-    chaos: 0.15,
-    grip: 1,
-    hazards: [],
-  },
-  {
+  // ---------- Normal: open floors, a gentle collapse, almost no hazards ----------
+  stage({ id: 'hall', name: 'The Great Hall', tier: 'normal', tiles: 'stone', theme: CRYPT, map: DISC_WITH_CORE, collapseTime: 25 }),
+  stage({
     id: 'courtyard',
     name: 'Overgrown Courtyard',
     tier: 'normal',
     tiles: 'dirt',
     theme: GARDEN,
     map: ['ooooooo', 'ooooooo', 'oo###oo', 'oo###oo', 'oo###oo', 'ooooooo', 'ooooooo'],
+  }),
+  stage({
+    id: 'longhall',
+    name: 'The Long Table',
+    tier: 'normal',
+    tiles: 'wood',
+    theme: TAVERN,
+    map: ['..ooooo..', '.ooooooo.', 'ooo###ooo', 'ooo###ooo', 'ooo###ooo', '.ooooooo.', '..ooooo..'],
+  }),
+  stage({
+    id: 'garden',
+    name: 'Sunken Garden',
+    tier: 'normal',
+    tiles: 'dirt',
+    theme: SUNSET,
+    map: ['....o....', '...ooo...', '..ooooo..', '.ooo#ooo.', 'ooo###ooo', '.ooo#ooo.', '..ooooo..', '...ooo...', '....o....'],
+  }),
+  stage({
+    id: 'anvil',
+    name: 'The Anvil',
+    tier: 'normal',
+    tiles: 'stone',
+    theme: ROYAL,
+    map: ['.ooooo.', 'ooooooo', 'oo###oo', 'oo###oo', 'oo###oo', 'ooooooo', '.ooooo.'],
+    hazards: [{ type: 'bumper', at: [0, 0] }],
+  }),
+
+  // ---------- Medium: awkward shapes and the first real hazards ----------
+  stage({
+    id: 'horseshoe',
+    name: 'The Horseshoe',
+    tier: 'medium',
+    tiles: 'dirt',
+    theme: GARDEN,
+    map: ['ooo...ooo', 'ooo...ooo', 'ooo...ooo', 'ooo...ooo', 'ooo###ooo', 'ooo###ooo', '.ooooooo.'],
     spawns: [
-      [0, 2],
-      [0, -2],
+      [-3, -2],
+      [3, -2],
     ],
-    collapseDelay: 8,
-    collapseTime: 24,
-    warn: 1,
-    chaos: 0.15,
-    grip: 1,
-    hazards: [],
-  },
-  {
+  }),
+  stage({
     id: 'ring',
     name: 'The Ring',
     tier: 'medium',
     tiles: 'stone',
     theme: CRYPT,
-    map: [
-      '...ooo...',
-      '..ooooo..',
-      '.ooooooo.',
-      'ooo###ooo',
-      'ooo#.#ooo',
-      'ooo###ooo',
-      '.ooooooo.',
-      '..ooooo..',
-      '...ooo...',
-    ],
+    map: DISC.map((row, r) => (r === 4 ? 'ooo#.#ooo' : r === 3 || r === 5 ? 'ooo###ooo' : row)),
     spawns: [
       [0, 3],
       [0, -3],
     ],
-    collapseDelay: 6,
-    collapseTime: 20,
-    warn: 0.9,
-    chaos: 0.25,
-    grip: 1,
     hazards: [{ type: 'sweeper', length: 3.5, period: 7 }],
-  },
-  {
+  }),
+  stage({
     id: 'crossing',
     name: 'The Crossing',
     tier: 'medium',
     tiles: 'wood',
     theme: TAVERN,
-    map: [
-      '...ooo...',
-      '...ooo...',
-      '...ooo...',
-      'ooo###ooo',
-      'ooo###ooo',
-      'ooo###ooo',
-      '...ooo...',
-      '...ooo...',
-      '...ooo...',
-    ],
+    map: ['...ooo...', '...ooo...', '...ooo...', 'ooo###ooo', 'ooo###ooo', 'ooo###ooo', '...ooo...', '...ooo...', '...ooo...'],
     spawns: [
       [0, 3],
       [0, -3],
     ],
-    collapseDelay: 6,
-    collapseTime: 20,
-    warn: 0.9,
-    chaos: 0.25,
-    grip: 1,
     hazards: [
       { type: 'bumper', at: [2, 0] },
       { type: 'bumper', at: [-2, 0] },
     ],
-  },
-  {
+  }),
+  stage({
+    id: 'mill',
+    name: 'The Mill',
+    tier: 'medium',
+    tiles: 'wood',
+    theme: SUNSET,
+    map: ['..ooo..', '.ooooo.', 'oo###oo', 'oo###oo', 'oo###oo', '.ooooo.', '..ooo..'],
+    hazards: [{ type: 'sweeper', length: 3, period: -6.5 }],
+  }),
+  stage({
+    id: 'hourglass',
+    name: 'The Hourglass',
+    tier: 'medium',
+    tiles: 'stone',
+    theme: ROYAL,
+    map: ['ooooooo', 'ooooooo', '.oo#oo.', '..###..', '.oo#oo.', 'ooooooo', 'ooooooo'],
+    hazards: [{ type: 'spikes', tiles: [[0, 0]], period: 4.5 }],
+  }),
+
+  // ---------- Hard: gaps, narrow bridges, ice ----------
+  stage({
+    id: 'sieve',
+    name: 'The Sieve',
+    tier: 'hard',
+    tiles: 'stone',
+    theme: SEWER,
+    map: ['...ooo...', '..ooooo..', '.oo.o.oo.', 'ooooooooo', 'ooo###ooo', 'ooooooooo', '.oo.o.oo.', '..ooooo..', '...ooo...'],
+    hazards: [
+      {
+        type: 'spikes',
+        tiles: [
+          [-3, 0],
+          [3, 0],
+        ],
+        period: 4,
+      },
+    ],
+  }),
+  stage({
     id: 'isles',
     name: 'Twin Isles',
     tier: 'hard',
@@ -271,50 +335,55 @@ export const STAGES: Stage[] = [
       [0, 3],
       [0, -3],
     ],
-    collapseDelay: 5,
-    collapseTime: 18,
-    warn: 0.8,
-    chaos: 0.3,
-    grip: 1,
     hazards: [{ type: 'spikes', tiles: [[0, 0]], period: 3.5 }],
-  },
-  {
+  }),
+  stage({
     id: 'frost',
     name: 'Frostbite',
     tier: 'hard',
     tiles: 'stone',
     theme: FROST,
     map: ['..ooo..', '.ooooo.', 'ooo#ooo', 'oo###oo', 'ooo#ooo', '.ooooo.', '..ooo..'],
-    spawns: [
-      [0, 2],
-      [0, -2],
-    ],
-    collapseDelay: 5,
-    collapseTime: 18,
-    warn: 0.8,
-    chaos: 0.3,
     grip: 0.3,
     hazards: [
       { type: 'bumper', at: [2, 0] },
       { type: 'bumper', at: [-2, 0] },
     ],
-  },
-  {
+  }),
+  stage({
+    id: 'bridges',
+    name: 'Twin Bridges',
+    tier: 'hard',
+    tiles: 'wood',
+    theme: ROYAL,
+    // Only the left bridge survives, so the last ground is never split in two.
+    map: ['.ooooo.', '.ooooo.', '.ooooo.', '.#...o.', '.#...o.', '.#...o.', '.ooooo.', '.ooooo.', '.ooooo.'],
+    spawns: [
+      [0, 3],
+      [0, -3],
+    ],
+  }),
+  stage({
+    id: 'blackice',
+    name: 'Black Ice',
+    tier: 'hard',
+    tiles: 'stone',
+    theme: FROST,
+    map: DISC_WITH_CORE,
+    grip: 0.25,
+    hazards: [{ type: 'sweeper', length: 4, period: 8 }],
+  }),
+
+  // ---------- Extreme: fast, chaotic, and nothing is left standing ----------
+  stage({
     id: 'collapse',
     name: 'The Collapse',
     tier: 'extreme',
     tiles: 'stone',
     theme: INFERNO,
     map: DISC,
-    spawns: [
-      [0, 2],
-      [0, -2],
-    ],
-    collapseDelay: 3,
     collapseTime: 17,
-    warn: 0.7,
     chaos: 1,
-    grip: 1,
     hazards: [
       { type: 'sweeper', length: 4, period: -4.5 },
       {
@@ -328,8 +397,33 @@ export const STAGES: Stage[] = [
         period: 4,
       },
     ],
-  },
-  {
+  }),
+  stage({
+    id: 'gauntlet',
+    name: 'The Gauntlet',
+    tier: 'extreme',
+    tiles: 'wood',
+    theme: SUNSET,
+    map: ['ooo', 'ooo', 'ooo', 'ooo', 'ooo', 'ooo', 'ooo', 'ooo', 'ooo'],
+    spawns: [
+      [0, 3],
+      [0, -3],
+    ],
+    collapseTime: 14,
+    chaos: 0.2,
+    hazards: [
+      { type: 'bumper', at: [0, 0] },
+      {
+        type: 'spikes',
+        tiles: [
+          [0, 2],
+          [0, -2],
+        ],
+        period: 3.2,
+      },
+    ],
+  }),
+  stage({
     id: 'plank',
     name: 'The Plank',
     tier: 'extreme',
@@ -340,11 +434,8 @@ export const STAGES: Stage[] = [
       [-3, 0],
       [3, 0],
     ],
-    collapseDelay: 3,
     collapseTime: 13,
-    warn: 0.7,
     chaos: 0.2,
-    grip: 1,
     hazards: [
       { type: 'sweeper', length: 1.4, period: 3.2 },
       {
@@ -356,12 +447,47 @@ export const STAGES: Stage[] = [
         period: 3,
       },
     ],
-  },
+  }),
+  stage({
+    id: 'avalanche',
+    name: 'Avalanche',
+    tier: 'extreme',
+    tiles: 'stone',
+    theme: FROST,
+    map: SMALL_DISC,
+    grip: 0.3,
+    collapseTime: 14,
+    chaos: 1,
+    hazards: [{ type: 'sweeper', length: 3, period: -4 }],
+  }),
+  stage({
+    id: 'lastfloor',
+    name: 'The Last Floor',
+    tier: 'extreme',
+    tiles: 'stone',
+    theme: INFERNO,
+    map: ['ooooo', 'ooooo', 'ooooo', 'ooooo', 'ooooo'],
+    collapseDelay: 4,
+    chaos: 0.6,
+    hazards: [
+      { type: 'sweeper', length: 2.5, period: 3.6 },
+      {
+        type: 'spikes',
+        tiles: [
+          [2, 2],
+          [-2, 2],
+          [2, -2],
+          [-2, -2],
+        ],
+        period: 3.5,
+      },
+    ],
+  }),
 ]
 
 export const DEFAULT_STAGE = 'hall'
 
-// The solo campaign: every stage in order of difficulty. Each level is a short match on one
+// The solo campaign: every stage, in the order above. Each level is a short match on one
 // stage, and beating it opens the next.
 export const CAMPAIGN = STAGES.map((s) => s.id)
 export const CAMPAIGN_WINS = 2

@@ -1,10 +1,11 @@
 import type { RapierRigidBody } from '@react-three/rapier'
+import { CAMPAIGN, stageById } from '@plonko/shared'
 import type { Tier } from '@plonko/shared'
 import { fighters } from './fighters'
 import type { Intent } from './fighters'
 import { TILE, isSafe, refuge, routeStep } from './floor'
 import { itemsOnFloor } from './powerups'
-import { currentStage } from './store'
+import { currentStage, useGame } from './store'
 import { tuning } from './tuning'
 
 const STEP = 1 / 60
@@ -16,6 +17,15 @@ export const BOT_TIERS: Record<Tier, { speed: number; aggression: number; power:
   medium: { speed: 1.2, aggression: 1.5, power: 1.2, block: 0.25 },
   hard: { speed: 1.35, aggression: 2, power: 1.4, block: 0.45 },
   extreme: { speed: 1.55, aggression: 2.7, power: 1.55, block: 0.65 },
+}
+
+// In the campaign each tier has several levels, and the bot sharpens a little on each one, so
+// the later levels of a tier are harder than the first even on similar floors.
+function campaignEdge() {
+  const { campaign } = useGame.getState()
+  if (campaign === null) return 0
+  const tier = stageById(CAMPAIGN[campaign]).tier
+  return campaign - CAMPAIGN.findIndex((id) => stageById(id).tier === tier)
 }
 
 const BLOCK_RANGE = 4
@@ -34,7 +44,8 @@ export function botIntent(self: RapierRigidBody): Intent {
   const player = fighters.get('me')
   const target = player?.body?.translation()
   const tier = BOT_TIERS[currentStage().tier]
-  const speed = Math.min(1, tuning.botSpeed * tier.speed)
+  const edge = campaignEdge()
+  const speed = Math.min(1, tuning.botSpeed * tier.speed * (1 + 0.03 * edge))
 
   // React once to each dash the player starts nearby: sometimes turn to face it and block.
   const dashing = Boolean(player?.isDashing())
@@ -64,7 +75,7 @@ export function botIntent(self: RapierRigidBody): Intent {
     // Dash only with floor to land on, and steer straight at the player while lining it up.
     if (goal && dist < tuning.botDashRange && isSafe(me.x + (dx / dist) * TILE, me.z + (dz / dist) * TILE)) {
       goal = { x: target.x, z: target.z }
-      dash = Math.random() < tuning.botAggression * tier.aggression * STEP
+      dash = Math.random() < tuning.botAggression * tier.aggression * (1 + 0.1 * edge) * STEP
     }
   }
   // Detour for a power-up that is clearly nearer than the player.

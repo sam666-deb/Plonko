@@ -74,7 +74,7 @@ function JoinByCode() {
 export function Landing() {
   const setMenu = useGame((s) => s.setMenu)
   const screen = useGame((s) => s.screen)
-  const beaten = useSettings((s) => s.campaignStars.filter((n) => n > 0).length)
+  const beaten = useSettings((s) => CAMPAIGN.filter((id) => (s.campaignStars[id] ?? 0) > 0).length)
   const invited = new URLSearchParams(location.search).has('room')
   const show = (next: 'home' | 'levels') => useGame.setState({ screen: next })
 

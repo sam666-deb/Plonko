@@ -18,7 +18,7 @@ export function Levels({ onBack }: { onBack: () => void }) {
   const stars = useSettings((s) => s.campaignStars)
   const startCampaign = useGame((s) => s.startCampaign)
   const startSolo = useGame((s) => s.startSolo)
-  const beaten = stars.filter((n) => n > 0).length
+  const beaten = CAMPAIGN.filter((id) => (stars[id] ?? 0) > 0).length
 
   return (
     <div className="levels">
@@ -32,7 +32,9 @@ export function Levels({ onBack }: { onBack: () => void }) {
       <div className="level-grid">
         {CAMPAIGN.map((id, n) => {
           const stage = stageById(id)
-          const open = n === 0 || (stars[n - 1] ?? 0) > 0
+          // Open once the level before it is beaten. A level already beaten stays open, so progress
+          // made before levels were added in front of it is not locked away.
+          const open = n === 0 || (stars[CAMPAIGN[n - 1]] ?? 0) > 0 || (stars[id] ?? 0) > 0
           return (
             <button key={id} className="level" disabled={!open} onClick={() => startCampaign(n)}>
               <span className="level-head">
@@ -41,7 +43,7 @@ export function Levels({ onBack }: { onBack: () => void }) {
               </span>
               <StagePreview stage={stage} />
               <span className="level-name">{stage.name}</span>
-              {open ? <Stars count={stars[n] ?? 0} /> : <span className="locked">Beat level {n} to unlock</span>}
+              {open ? <Stars count={stars[id] ?? 0} /> : <span className="locked">Beat level {n} to unlock</span>}
             </button>
           )
         })}

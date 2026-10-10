@@ -184,7 +184,7 @@ export function Hud() {
   const isTouch = useTouchDevice()
   const myName = useSettings((s) => s.name) || 'You'
   const campaign = useGame((s) => s.campaign)
-  const savedStars = useSettings((s) => s.campaignStars)
+  const best = useSettings((s) => (campaign === null ? 0 : (s.campaignStars[CAMPAIGN[campaign]] ?? 0)))
   const startCampaign = useGame((s) => s.startCampaign)
   const toLevels = useGame((s) => s.toLevels)
   // A campaign level is named by its place in the campaign; a match by the round it has reached.
@@ -258,8 +258,8 @@ export function Hud() {
             {/* Three stars for a clean win, one fewer for each round dropped. */}
             {match === 'won' && <Stars count={Math.max(1, 3 - scores.them)} />}
             <Summary myName={myName} rivalName={rivalName} scores={scores} />
-            {match === 'won' && (savedStars[campaign] ?? 0) > Math.max(1, 3 - scores.them) && (
-              <div className="best">Your best here is {savedStars[campaign]} stars</div>
+            {match === 'won' && best > Math.max(1, 3 - scores.them) && (
+              <div className="best">Your best here is {best} stars</div>
             )}
             <div className="panel-actions">
               {match === 'won' && campaign + 1 < CAMPAIGN.length && (

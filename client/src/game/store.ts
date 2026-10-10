@@ -148,10 +148,10 @@ export const winsNeeded = () => (useGame.getState().campaign === null ? WINS_TO_
 // Three stars for a clean win, one fewer for each round dropped, and never fewer than one.
 // Only ever raises a level's saved result.
 function saveStars(level: number, roundsLost: number) {
-  const stars = [...useSettings.getState().campaignStars]
-  for (let n = 0; n <= level; n++) stars[n] ??= 0
-  stars[level] = Math.max(stars[level], Math.max(1, 3 - roundsLost))
-  useSettings.getState().change({ campaignStars: stars })
+  const stars = useSettings.getState().campaignStars
+  const id = CAMPAIGN[level]
+  const earned = Math.max(1, 3 - roundsLost)
+  if (earned > (stars[id] ?? 0)) useSettings.getState().change({ campaignStars: { ...stars, [id]: earned } })
 }
 
 // True once the countdown is over and until the round or match is decided. Never while the menu is open.
