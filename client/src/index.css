@@ -334,13 +334,23 @@ kbd {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Centred by the auto margins below, not by justify-content: a centred column that is taller
+     than the screen overflows off the top, where scrolling cannot reach it. */
+  justify-content: flex-start;
   gap: 28px;
   text-align: center;
   pointer-events: auto;
   /* Darkens the arena turning behind, more so at the edges. */
   background: radial-gradient(900px 600px at 50% 45%, rgb(12 7 20 / 0.45), rgb(12 7 20 / 0.9));
   animation: rise 500ms ease-out;
+}
+
+.landing > :first-child {
+  margin-top: auto;
+}
+
+.landing > :last-child {
+  margin-bottom: auto;
 }
 
 @keyframes rise {
